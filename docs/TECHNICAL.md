@@ -268,14 +268,23 @@ actions, ignoring auto-repeat.
 | `/var/lib/t2rx/state.json` | last preset (restored at boot) |
 | `/run/t2rx.status` | live tuner status (above) |
 | `/var/log/t2rx.log` | log (rotated at 1 MB) |
-| `/run/t2rx.sock` | control: `status`, `preset N`, `next`, `prev`, `osd`, `back`, `reload` (use `t2rx-ctl`) |
+| `/run/t2rx.sock` | control: `status`, `preset N`, `next`, `prev`, `osd`, `back`, `reload`, `update` (use `t2rx-ctl`) |
 
 The service (`t2rx.service`) waits for the TV HAT, runs as root (the display,
 CEC monitor and driver overrides need it) and restarts on failure. The
 installer masks PipeWire/WirePlumber: on images that have them they grab the
 HDMI sound device ("Device or resource busy").
 
-### 5.6 Margin
+### 5.6 Updates
+`update.py` asks the GitHub releases API for the latest tag (a minute after
+boot, then daily, in a background thread so nothing stalls if the network is
+slow or absent) and compares it with the running version. With `updates = auto`
+the receiver installs it only while nothing is being received - never during a
+transmission - by `git fetch`, `git checkout <tag>` and `install.sh --no-boot`
+in the checkout it was installed from, then exits so systemd restarts it into
+the new version. `notify` waits for OK on the remote; `off` disables it.
+
+### 5.7 Margin
 Margin = measured C/N minus the C/N the signalled mode needs, from typical
 DVB-T2 figures (e.g. QPSK 1/2 about 2 dB, 16QAM 1/2 about 7 dB, 64QAM 2/3
 about 14 dB). Treat it as a guide: green 3 dB or more, amber 0-3 dB, red below.

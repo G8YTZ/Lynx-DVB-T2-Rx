@@ -241,6 +241,13 @@ def render_idle(W, H, st, info, presets, message=None, version=""):
     warn = info.get("warning")
     if warn:
         d.text((cx + 50 * s, cy + ch - 30 * s), warn, font=font(24 * s), fill=AMBER, anchor="lm")
+    upd = info.get("update")
+    if upd:
+        h = 56 * s
+        d.rounded_rectangle([cx, cy + ch + 24 * s, cx + cw, cy + ch + 24 * s + h], radius=12 * s,
+                            fill=BG_RAISED, outline=ACCENT, width=2)
+        d.text((cx + 30 * s, cy + ch + 24 * s + h / 2), upd, font=font(26 * s, bold=True),
+               fill=INFO, anchor="lm")
 
     # presets
     px, py, pw = 1200 * s, 150 * s, W - 1260 * s

@@ -7,6 +7,7 @@ set -e
 cd "$(dirname "$0")"
 
 echo "== Packages"
+sudo apt-get install -y --no-install-recommends git >/dev/null 2>&1 || true
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends gcc libc6-dev v4l-utils dvb-tools \
   python3-gi python3-pil python3-numpy fonts-dejavu-core \
@@ -18,7 +19,7 @@ echo "== Program -> /opt/t2rx"
 sudo mkdir -p /opt/t2rx /etc/t2rx /var/lib/t2rx
 gcc -O2 -Wall -o src/t2rx src/t2rx.c
 sudo install -m 755 src/t2rx src/t2rxd.py /opt/t2rx/
-sudo install -m 644 src/osd.py src/fb.py src/cec.py src/osdplane.py /opt/t2rx/
+sudo install -m 644 src/osd.py src/fb.py src/cec.py src/osdplane.py src/update.py /opt/t2rx/
 sudo install -m 755 src/t2rx-ctl /usr/local/bin/t2rx-ctl
 
 echo "== Settings -> /etc/t2rx (existing files are kept)"
@@ -31,7 +32,7 @@ grep -q "^osd_plane" /etc/t2rx/t2rx.conf || echo "osd_plane = auto" | sudo tee -
 sudo sed -i 's/^\(audio = [^ ]*\) .*$/\1/' /etc/t2rx/t2rx.conf
 sudo sed -i 's/^audio_buffer_ms = 1000$/audio_buffer_ms = 200/' /etc/t2rx/t2rx.conf
 for kv in "audio_buffer_ms = 200" "audio_volume = 0.8" "osd_interval = 2" \
-          "start_buffer_ms = 1500" "max_buffer_ms = 8000"; do
+          "start_buffer_ms = 1500" "max_buffer_ms = 8000" "updates = auto"; do
   grep -q "^${kv%% *}" /etc/t2rx/t2rx.conf || echo "$kv" | sudo tee -a /etc/t2rx/t2rx.conf >/dev/null
 done
 

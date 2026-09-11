@@ -33,12 +33,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import osd  # noqa: E402
 import fb as fbmod  # noqa: E402
+import update as updater  # noqa: E402
 try:
     import osdplane  # noqa: E402
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.6"
+VERSION = "t2rx 1.7"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -68,6 +69,7 @@ def read_conf():
         "audio": "hdmi:CARD=vc4hdmi,DEV=0", "scale": "kms", "osd": "auto", "osd_timeout": "15",
         "osd_plane": "auto", "audio_buffer_ms": "200", "audio_volume": "0.8",
         "osd_interval": "2", "start_buffer_ms": "1500", "max_buffer_ms": "8000",
+        "updates": "auto",
         "cec": "yes", "cec_name": "Lynx DVB-T2 Rx", "cec_active_source": "yes",
         "adapter": "0", "loss_seconds": "5"}})
     c.read(CONF)
@@ -152,6 +154,8 @@ class Receiver:
         self.playing = False
         self.pause_t = 0.0
         self.over_t = None
+        self.update_tag = None       # newer release found, shown on the status page
+        self.updating = False
         self.safe_mode = False       # set if the OSD chain keeps failing: play without it
         self.fails = 0               # player errors since the last picture
 
@@ -424,6 +428,56 @@ class Receiver:
         except OSError:
             pass
 
+    # ------------------------------------------------------------ updates
+    def check_updates(self):
+        """Look for a new release, in the background: shortly after boot and daily."""
+        if self.cfg.get("updates", "auto") == "off" or self.updating:
+            return True
+
+        def work():
+            tag = updater.check(VERSION)
+            if tag:
+                GLib.idle_add(self._found_update, tag)
+        threading.Thread(target=work, daemon=True).start()
+        return True
+
+    def _found_update(self, tag):
+        if tag != self.update_tag:
+            self.update_tag = tag
+            log("update %s available" % tag)
+            self.draw_idle(force=True)
+        return False
+
+    def _maybe_install(self):
+        """Install by itself when nothing is being received (like a TV)."""
+        if (self.update_tag and not self.updating and self.cfg.get("updates", "auto") == "auto"
+                and not self.video_on and self.st.get("state") != "LOCK"):
+            self.install_update()
+
+    def install_update(self):
+        if self.updating or not self.update_tag:
+            return
+        self.updating = True
+        tag = self.update_tag
+        log("installing update %s" % tag)
+        self.stop()
+        self.draw_idle(force=True)
+
+        def work():
+            ok = updater.install(tag, log)
+            GLib.idle_add(self._installed, ok)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _installed(self, ok):
+        self.updating = False
+        if ok:
+            log("restarting into the new version")
+            self.quit()                      # systemd Restart=always brings it back
+        else:
+            self.update_tag = None           # don't loop on a failure
+            self.restart_at = time.monotonic() + 1
+        return False
+
     def _buffered(self):
         """Seconds of stream waiting to be played (audio if there is sound, else video)."""
         if not self.pipe:
@@ -468,6 +522,7 @@ class Receiver:
             return True
         self.read_status()
         self._pace()
+        self._maybe_install()
         if self.video_on:
             if not self.info.get("audio"):
                 self._audio_info()
@@ -484,7 +539,13 @@ class Receiver:
         msg = self.message
         if not msg and self.st.get("state") == "LOCK" and not self.video_on:
             msg = ("LOCKED - waiting for picture", osd.GREEN)
-        img = osd.render_idle(self.fb.w, self.fb.h, self.st, self.info, self.presets, msg, VERSION)
+        info = dict(self.info)
+        if self.updating:
+            info["update"] = "Installing update %s - please wait" % self.update_tag
+        elif self.update_tag:
+            info["update"] = "Update %s available%s" % (
+                self.update_tag, "" if self.cfg.get("updates", "auto") == "auto" else " - press OK to install")
+        img = osd.render_idle(self.fb.w, self.fb.h, self.st, info, self.presets, msg, VERSION)
         # Only the status card changes second to second: redraw just that
         # unless the layout (preset, message, presets list) changed.
         layout = (self.preset, msg, str(self.presets), self.info.get("warning"), self.fb.w, self.fb.h)
@@ -578,7 +639,10 @@ class Receiver:
             if n in keys:
                 self.select(n)
         elif name in ("select", "info"):
-            self.cycle_osd()
+            if self.update_tag and not self.video_on and not self.updating:
+                self.install_update()
+            else:
+                self.cycle_osd()
         elif name == "back":
             self.osd_mode = "off"
             self.update_osd(force=True)
@@ -627,6 +691,15 @@ class Receiver:
             elif cmd[0] == "status":
                 reply = json.dumps({"preset": self.preset, "info": self.info, "tuner": self.st,
                                     "video": self.video_on, "osd": self.osd_mode})
+            elif cmd[0] == "update":
+                if self.update_tag:
+                    self.install_update()
+                    reply = "installing %s" % self.update_tag
+                else:
+                    tag = updater.check(VERSION)
+                    if tag:
+                        self.update_tag = tag
+                    reply = ("update %s available" % tag) if tag else "up to date (%s)" % VERSION
             elif cmd[0] == "reload":
                 self.presets = read_presets()
                 self.start()
@@ -667,6 +740,8 @@ class Receiver:
             GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, sig, self.quit)
         self.start()
         GLib.timeout_add(500, self.tick)
+        GLib.timeout_add_seconds(60, self.check_updates)          # shortly after boot
+        GLib.timeout_add_seconds(24 * 3600, self.check_updates)   # and daily
         self.loop.run()
 
     def quit(self):

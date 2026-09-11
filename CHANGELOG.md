@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7
+* **Software updates, like a TV.** Checks GitHub for a new release a minute
+  after boot and once a day, shows it on the status page, and (with
+  `updates = auto`) installs it when nothing is being received - never during a
+  transmission. `updates = notify` shows it and waits for OK on the remote;
+  `off` disables the check. Manual: `t2rx-ctl update`.
+
 ## 1.6
 * **Start cushion.** The player starts paused and plays once 1.5 s of stream is
   stored (`start_buffer_ms`). 1.5 started with almost nothing in hand, so the

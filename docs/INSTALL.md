@@ -108,7 +108,7 @@ From SSH:
 |---|---|
 | Up / Down, CH+ / CH-, Left / Right | next / previous preset |
 | 0-9 | preset by number |
-| OK or Info | OSD: full -> badge -> off |
+| OK or Info | OSD: full -> badge -> off (installs a waiting update when there is no picture) |
 | Back / Exit | hide the OSD |
 
 If the keys don't reach the receiver, turn on the TV's HDMI-CEC control
@@ -130,9 +130,22 @@ TV's input list as **Lynx DVB-T2 Rx**.
 ![Status page warning that the patched driver is missing](images/status_driver_warning.png)
 
 ## Updating
+The receiver updates itself: a minute after boot and once a day it checks
+GitHub for a new release. If there is one it appears on the status page, and
+when nothing is being received it installs it and restarts - never in the
+middle of a transmission. In `/etc/t2rx/t2rx.conf`:
+
+| `updates` | |
+|---|---|
+| `auto` (default) | check, and install when idle |
+| `notify` | show it on the status page; press OK on the remote to install |
+| `off` | no checking |
+
+By hand: `t2rx-ctl update` (checks, and installs if one is waiting), or
+
     cd ~/Lynx-DVB-T2-Rx && git pull && ./install.sh
 
-Your presets and settings in `/etc/t2rx` are kept.
+Your presets and settings in `/etc/t2rx` are kept either way.
 
 ## Removing
     sudo systemctl disable --now t2rx
