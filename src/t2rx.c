@@ -21,6 +21,9 @@
 #include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <linux/dvb/dmx.h>
 #include <linux/dvb/frontend.h>
 
@@ -107,7 +110,9 @@ static void usage(void)
 {
     fprintf(stderr,
         "usage: t2rx -f FREQ_HZ [-b 1.7|MHz|Hz] [-a adapter] [-p plp] [-s status_file]\n"
-        "            [-l loss_seconds] [-q]\n"
+        "            [-l loss_seconds] [-u udp_port] [-q]\n"
+        "  -u  send the TS as UDP (7 packets per datagram) to 127.0.0.1:port\n"
+        "      instead of stdout - a live source for the player, so it never builds a backlog\n"
         "  -b  bandwidth given to the driver (default 1.7). For 1.35/2 MHz with the\n"
         "      patched cxd2880 driver, set nb_fs_hz first and pass -b 1.7.\n");
 }
@@ -115,11 +120,11 @@ static void usage(void)
 int main(int argc, char** argv)
 {
     unsigned freq = 0, bw_hz = 1712000;
-    int adapter = 0, plp = 0, quiet = 0;
+    int adapter = 0, plp = 0, quiet = 0, udp_port = 0;
     double loss = 5;
     const char* statf = NULL;
     int c;
-    while ((c = getopt(argc, argv, "f:b:a:p:s:l:qh")) != -1) {
+    while ((c = getopt(argc, argv, "f:b:a:p:s:l:u:qh")) != -1) {
         switch (c) {
         case 'f': freq = (unsigned)strtoul(optarg, NULL, 10); break;
         case 'b': { double v = atof(optarg);
@@ -129,6 +134,7 @@ int main(int argc, char** argv)
         case 's': statf = optarg; break;
         case 'l': loss = atof(optarg); break;
         case 'q': quiet = 1; break;
+        case 'u': udp_port = atoi(optarg); break;
         default: usage(); return 1;
         }
     }
@@ -153,6 +159,19 @@ int main(int argc, char** argv)
     if (tune(fe, freq, bw_hz, plp) < 0) { perror("FE_SET_PROPERTY"); return 1; }
     if (!quiet) fprintf(stderr, "t2rx: tuning %.3f MHz, bandwidth %u Hz, PLP %d\n", freq / 1e6, bw_hz, plp);
 
+    int us = -1;
+    struct sockaddr_in ua;
+    if (udp_port) {
+        us = socket(AF_INET, SOCK_DGRAM, 0);
+        memset(&ua, 0, sizeof ua);
+        ua.sin_family = AF_INET;
+        ua.sin_port = htons(udp_port);
+        ua.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        int sz = 1 << 20;
+        setsockopt(us, SOL_SOCKET, SO_SNDBUF, &sz, sizeof sz);
+    }
+    static unsigned char pend[188 * 7];      /* UDP: whole 7-packet datagrams */
+    size_t npend = 0;
     static unsigned char buf[188 * 1024];
     double t_tune = now(), t_stat = 0, t_unlock = 0, t_start = now();
     int locked = 0, ever = 0;
@@ -162,7 +181,18 @@ int main(int argc, char** argv)
         int r = poll(&pf, 1, 100);
         if (r > 0 && (pf.revents & POLLIN)) {
             ssize_t n = read(dvr, buf, sizeof buf);
-            if (n > 0) {
+            if (n > 0 && us >= 0) {
+                for (ssize_t i = 0; i < n; ) {
+                    size_t take = (size_t)(n - i) < sizeof pend - npend ? (size_t)(n - i) : sizeof pend - npend;
+                    memcpy(pend + npend, buf + i, take);
+                    npend += take; i += take;
+                    if (npend == sizeof pend) {
+                        sendto(us, pend, npend, 0, (struct sockaddr*)&ua, sizeof ua);
+                        npend = 0;
+                    }
+                }
+                bytes += n;
+            } else if (n > 0) {
                 ssize_t w = 0;
                 while (w < n) {
                     ssize_t k = write(1, buf + w, n - w);

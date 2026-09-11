@@ -128,10 +128,10 @@ stock driver.
 ## 5. Receiver software
     TV HAT (CXD2880)
        |  /dev/dvb/adapter0
-    t2rx (C) --- tune, lock, whole TS to a pipe, status -> /run/t2rx.status
-       |  pipe
+    t2rx (C) --- tune, lock, whole TS over UDP, status -> /run/t2rx.status
+       |  UDP 127.0.0.1:9960
     t2rxd.py (Python, GLib main loop)
-       |- GStreamer: fdsrc ! tsparse ! tsdemux
+       |- GStreamer: udpsrc ! tsparse ! tsdemux
        |     video: h264parse ! v4l2h264dec ! kmssink (zero-copy, video plane)
        |     audio: decodebin ! audioconvert ! audioresample ! alsasink (HDMI)
        |- OSD: osd.py renders the panel (Pillow) -> osdplane.py -> OSD plane
@@ -141,8 +141,9 @@ stock driver.
 
 ### 5.1 t2rx
 A small C program using the Linux DVB API directly. It sets up DVB-T2 at the
-preset frequency, passes every PID to the DVR device and copies the transport
-stream to its output. It retunes every 10 s until lock, and exits with status 2
+preset frequency, passes every PID to the DVR device and sends the transport
+stream to the player as UDP datagrams of seven packets on localhost (`-u`), or
+to stdout without it. It retunes every 10 s until lock, and exits with status 2
 if lock is lost for `loss_seconds`, so the supervisor can restart the player
 cleanly. Twice a second it writes the status file:
 
@@ -151,7 +152,14 @@ cleanly. Twice a second it writes the status file:
 `mod`, `fec`, `gi` and `fft` are what the transmitter is signalling (read back
 from the demodulator), so the OSD shows the real mode on air.
 
-### 5.2 The player, and three lessons
+### 5.2 The player, and four lessons
+* **Live source, or delay builds up.** Fed through a pipe, the player queued
+  everything that arrived while the decoder waited for the first keyframe, then
+  played from the start of that queue: the keyframe wait (often seconds) became
+  permanent delay. `udpsrc` is a live source, so playback follows arrival time
+  and late data is dropped. Joining mid-GOP with 8 s to the next keyframe, delay
+  fell from 8.4 s to 2.0 s. A transmitter keyframe every 1-2 s shortens the
+  wait for the first picture too.
 * **Keyframes and queues.** After lock the decoder must wait for the next
   keyframe, which can be seconds away. With size-limited queues the audio queue
   filled first, blocked the demultiplexer and starved the video: a silent

@@ -38,7 +38,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.2"
+VERSION = "t2rx 1.3"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -47,6 +47,7 @@ STATE = "/var/lib/t2rx/state.json"
 STATUS = "/run/t2rx.status"
 SOCK = "/run/t2rx.sock"
 LOG = "/var/log/t2rx.log"
+UDP_PORT = 9960          # tuner -> player on localhost (a live source: no backlog, no delay build-up)
 NB = "/sys/module/cxd2880/parameters"
 # driver override per bandwidth: (nb_fs_hz, nb_if_bw); 1700 = stock driver
 BW_TABLE = {1700: (0, -1), 2000: (2285714, 0), 1350: (1542857, 3)}
@@ -201,16 +202,16 @@ class Receiver:
         log("tune P%d %s %.3f MHz %d kHz" % (self.preset, p["name"], p["freq"], p["bw"]))
         args = [ENV("T2RX_TUNER", os.path.join(HERE, "t2rx")), "-f", str(int(round(p["freq"] * 1e6))), "-b", "1.7",
                 "-p", str(p["plp"]), "-a", self.cfg.get("adapter", "0"), "-s", STATUS,
-                "-l", self.cfg.get("loss_seconds", "5"), "-q"]
+                "-l", self.cfg.get("loss_seconds", "5"), "-u", str(UDP_PORT), "-q"]
         try:
-            self.tuner = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            self.tuner = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except OSError as e:
             log("tuner: %s" % e)
             self.message = ("TUNER ERROR", osd.RED)
             self.restart_at = time.monotonic() + 5
             return
         threading.Thread(target=self._watch_tuner, args=(self.tuner, gen), daemon=True).start()
-        self._build_pipeline(self.tuner.stdout.fileno())
+        self._build_pipeline(UDP_PORT)
         self.draw_idle(force=True)
 
     def _watch_tuner(self, proc, gen):
@@ -226,7 +227,7 @@ class Receiver:
         self.restart_at = time.monotonic() + 1
         return False
 
-    def _pipeline_desc(self, fd):
+    def _pipeline_desc(self, port):
         q = "leaky=downstream max-size-time=2000000000 max-size-bytes=0 max-size-buffers=0"
         vsink = ENV("T2RX_VSINK", "kmssink name=vsink")
         dec = ENV("T2RX_DECODER", "v4l2h264dec")
@@ -248,9 +249,14 @@ class Receiver:
             vchain = ("%s ! video/x-raw,format=I420 ! %s"
                       "gdkpixbufoverlay name=osd offset-x=24 offset-y=20 ! "
                       "identity name=vprobe silent=true ! %s" % (dec, par, vsink))
-        desc = ("fdsrc fd=%d ! queue max-size-bytes=4000000 max-size-time=0 max-size-buffers=0 ! "
+        # udpsrc is a live source: the player runs to the clock from arrival, drops
+        # anything late, and so never builds up delay (with a pipe it kept a backlog
+        # of everything received while it waited for the first keyframe).
+        desc = ("udpsrc port=%d buffer-size=4194304 "
+                "caps=\"video/mpegts,systemstream=(boolean)true,packetsize=(int)188\" ! "
+                "queue leaky=downstream max-size-time=1000000000 max-size-bytes=0 max-size-buffers=0 ! "
                 "tsparse ! tsdemux name=d latency=400 "
-                "d. ! video/x-h264 ! queue %s ! h264parse ! %s " % (fd, q, vchain))
+                "d. ! video/x-h264 ! queue %s ! h264parse ! %s " % (port, q, vchain))
         audio = self.cfg.get("audio", "none")
         if audio != "none":
             asink = ENV("T2RX_ASINK", "alsasink device=%s async=false" % audio)
@@ -258,9 +264,9 @@ class Receiver:
                      % (q, asink))
         return desc
 
-    def _build_pipeline(self, fd):
+    def _build_pipeline(self, port):
         try:
-            self.pipe = Gst.parse_launch(self._pipeline_desc(fd))
+            self.pipe = Gst.parse_launch(self._pipeline_desc(port))
         except GLib.Error as e:
             log("pipeline: %s" % e)
             self.fails += 1

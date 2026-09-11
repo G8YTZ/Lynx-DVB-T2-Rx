@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3
+* **Much less delay.** The tuner now hands the stream to the player over UDP on
+  localhost, a live source. Before, the player stored everything received while
+  it waited for the first keyframe and then played from the start of that store,
+  so the keyframe wait became permanent delay. Measured joining a stream mid-GOP
+  (8 s to the next keyframe): end-to-end delay down from 8.4 s to 2.0 s.
+
 ## 1.2
 * **OSD on its own display plane.** The video now goes to the screen zero-copy
   (straight from the hardware decoder) and the OSD sits on a second hardware
