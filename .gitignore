@@ -1,0 +1,9 @@
+src/t2rx
+__pycache__/
+*.pyc
+driver/cxd2880-nb/*.o
+driver/cxd2880-nb/*.ko
+driver/cxd2880-nb/*.mod*
+driver/cxd2880-nb/.*.cmd
+driver/cxd2880-nb/Module.symvers
+driver/cxd2880-nb/modules.order

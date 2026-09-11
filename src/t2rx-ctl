@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+"""t2rx-ctl - control the DVB-T2 receiver from a shell.
+  t2rx-ctl status | preset N | next | prev | osd | back | reload"""
+import json, os, socket, sys
+if len(sys.argv) < 2:
+    sys.exit(__doc__)
+s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+me = "/tmp/t2rx-ctl.%d" % os.getpid()
+s.bind(me)
+s.settimeout(3)
+try:
+    s.sendto(" ".join(sys.argv[1:]).encode(), "/run/t2rx.sock")
+    r = s.recv(8192).decode()
+    try:
+        print(json.dumps(json.loads(r), indent=2))
+    except ValueError:
+        print(r)
+except OSError as e:
+    sys.exit("t2rx-ctl: receiver not running? (%s)" % e)
+finally:
+    os.unlink(me)
