@@ -27,6 +27,11 @@ echo "== Settings -> /etc/t2rx (existing files are kept)"
 # upgrade old defaults (anything you changed yourself is left alone)
 sudo sed -i 's/^cec_name = G8YTZ T2 Rx$/cec_name = Lynx DVB-T2 Rx/; s/^osd_timeout = 8$/osd_timeout = 15/' /etc/t2rx/t2rx.conf
 grep -q "^osd_plane" /etc/t2rx/t2rx.conf || echo "osd_plane = auto" | sudo tee -a /etc/t2rx/t2rx.conf >/dev/null
+# 1.4: buffer is its own setting now - strip hand-added ALSA buffer options from the audio line
+sudo sed -i 's/^\(audio = [^ ]*\) .*buffer-time=.*$/\1/' /etc/t2rx/t2rx.conf
+for kv in "audio_buffer_ms = 1000" "audio_volume = 0.8" "osd_interval = 2"; do
+  grep -q "^${kv%% *}" /etc/t2rx/t2rx.conf || echo "$kv" | sudo tee -a /etc/t2rx/t2rx.conf >/dev/null
+done
 
 echo "== Service"
 sudo systemctl disable --now t2box 2>/dev/null || true      # early test version

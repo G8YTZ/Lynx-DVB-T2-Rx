@@ -178,7 +178,20 @@ from the demodulator), so the OSD shows the real mode on air.
 receiver drops the OSD and pixel-shape stages and plays the plain chain, and
 logs why. A display problem never costs the picture.
 
-### 5.3 Display
+### 5.3 Sound on a single core
+The Pi Zero W has one CPU core, so anything that briefly takes it (an OSD
+redraw, a background job) can leave the sound card empty for a moment - a
+break-up you mostly hear on speech. Three defences:
+* a **1 s ALSA buffer** (`audio_buffer_ms`; GStreamer's default is 0.2 s). The
+  picture is delayed by the same amount to keep lip-sync;
+* the OSD is redrawn at most every 2 s, on a thread that lowers its own
+  priority (nice 15), while the service runs at nice -5;
+* **headroom**: `audio_volume` 0.8 before conversion to 16-bit, because AAC
+  decoding can overshoot full scale on loud peaks and clip.
+Measured: the Zero ran at 46 C with no throttling (`vcgencmd get_throttled` =
+0x0), so heat was not the cause; a heatsink is still sensible under the HAT.
+
+### 5.3a Display
 * **Status page**: drawn with Pillow straight onto the framebuffer (16- or
   32-bit), with only the live card redrawn each second (cheap on a Zero). The
   text console is unbound from the framebuffer while the receiver owns it.

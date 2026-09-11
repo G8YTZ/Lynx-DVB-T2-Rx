@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4
+* Sound: 1 s audio buffer (`audio_buffer_ms`, was ALSA's 0.2 s) so short CPU
+  peaks on a Pi Zero can't break it up; `audio_volume` 0.8 leaves headroom for
+  AAC overshoot on loud peaks (clipping crackle).
+* OSD redrawn at most every 2 s (`osd_interval`), on a low-priority thread, so
+  a redraw can never hold up the audio. Service runs at Nice -5.
+* Heatsink recommended (the TV HAT sits over the Pi's chip).
+
 ## 1.3
 * **Much less delay.** The tuner now hands the stream to the player over UDP on
   localhost, a live source. Before, the player stored everything received while

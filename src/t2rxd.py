@@ -38,7 +38,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.3"
+VERSION = "t2rx 1.4"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -67,7 +67,8 @@ def read_conf():
     c = configparser.ConfigParser()
     c.read_dict({"receiver": {
         "audio": "hdmi:CARD=vc4hdmi,DEV=0", "scale": "kms", "osd": "auto", "osd_timeout": "15",
-        "osd_plane": "auto",
+        "osd_plane": "auto", "audio_buffer_ms": "1000", "audio_volume": "0.8",
+        "osd_interval": "2",
         "cec": "yes", "cec_name": "Lynx DVB-T2 Rx", "cec_active_source": "yes",
         "adapter": "0", "loss_seconds": "5"}})
     c.read(CONF)
@@ -145,6 +146,10 @@ class Receiver:
                 self.plane = (osdplane.FakePlane() if ENV("T2RX_FAKEPLANE") else osdplane.OsdPlane())
             except Exception as e:
                 log("OSD plane unavailable (%s) - blending the OSD instead" % e)
+        self._osd_job = None
+        self._osd_event = threading.Event()
+        if self.plane is not None:
+            threading.Thread(target=self._osd_worker, daemon=True).start()
         self.safe_mode = False       # set if the OSD chain keeps failing: play without it
         self.fails = 0               # player errors since the last picture
 
@@ -259,9 +264,14 @@ class Receiver:
                 "d. ! video/x-h264 ! queue %s ! h264parse ! %s " % (port, q, vchain))
         audio = self.cfg.get("audio", "none")
         if audio != "none":
-            asink = ENV("T2RX_ASINK", "alsasink device=%s async=false" % audio)
-            desc += ("d. ! audio/mpeg ! queue %s ! decodebin ! audioconvert ! audioresample ! %s"
-                     % (q, asink))
+            buf = int(float(self.cfg.get("audio_buffer_ms", "1000")) * 1000)     # microseconds
+            asink = ENV("T2RX_ASINK", "alsasink device=%s buffer-time=%d latency-time=%d async=false"
+                        % (audio, buf, max(10000, buf // 10)))
+            vol = float(self.cfg.get("audio_volume", "0.8"))
+            # volume < 1 leaves headroom: AAC decoding can overshoot full scale on
+            # peaks, which clips (crackles) when converted to 16-bit
+            desc += ("d. ! audio/mpeg ! queue %s ! decodebin ! audioconvert ! volume volume=%.2f ! "
+                     "audioconvert ! audioresample ! %s" % (q, vol, asink))
         return desc
 
     def _build_pipeline(self, port):
@@ -438,6 +448,25 @@ class Receiver:
             box = osd.idle_card_box(self.fb.w, self.fb.h)
             self.fb.show(img.crop(box), box[:2])
 
+    def _osd_worker(self):
+        try:
+            os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 15)   # this thread only
+        except (OSError, AttributeError):
+            pass
+        while True:
+            self._osd_event.wait()
+            self._osd_event.clear()
+            job, self._osd_job = self._osd_job, None
+            if job is None or self.plane is None:
+                continue
+            mode, st, info = job
+            s = self.plane.w / 800.0
+            img = osd.render_osd(self.plane.w, st, info, mode)
+            if not self.video_on or self.last_osd == "off":
+                continue                              # hidden while we were drawing
+            if self.plane.show(img, 24 * s, 20 * s) != 0:
+                log("OSD plane: SetPlane failed")
+
     def _osd_key(self, mode):
         """What the panel shows, at display resolution: redraw only when it changes."""
         st, info = self.st, self.info
@@ -469,15 +498,15 @@ class Receiver:
                 self.last_osd = "off"
             return
         key = self._osd_key(mode)
-        if not force and (key == self.last_osd or now - getattr(self, "_osd_t", 0) < 1.0):
-            return                                   # unchanged, or redrawn within the last second
+        interval = float(self.cfg.get("osd_interval", "2"))
+        if not force and (key == self.last_osd or now - getattr(self, "_osd_t", 0) < interval):
+            return                                   # unchanged, or redrawn too recently
         self.last_osd = key
         self._osd_t = now
         if self.plane is not None:
-            s = self.plane.w / 800.0
-            img = osd.render_osd(self.plane.w, self.st, self.info, mode)
-            if self.plane.show(img, 24 * s, 20 * s) != 0:
-                log("OSD plane: SetPlane failed")
+            # drawn on a low-priority thread so a redraw can never hold up the audio
+            self._osd_job = (mode, dict(self.st), dict(self.info))
+            self._osd_event.set()
             return
         img = osd.render_osd(self.video_w, self.st, self.info, mode)
         data = GLib.Bytes.new(img.tobytes())

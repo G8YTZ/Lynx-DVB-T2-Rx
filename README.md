@@ -52,6 +52,7 @@ Rendered by the receiver's own code.
 | Raspberry Pi **TV HAT** | Sony CXD2880 DVB-T/T2 tuner. Needs the Pi's 40-pin header fitted (Zero WH, or solder one on). |
 | microSD card | 8 GB or larger. |
 | Power supply | Good quality 5 V micro-USB, 2.5 A recommended. |
+| Heatsink | A small low-profile one on the Pi's chip is recommended: the TV HAT sits over it. |
 | mini-HDMI to HDMI lead or adapter | For the Zero. |
 | TV or monitor | HDMI. HDMI-CEC for remote control (most TVs; often called Anynet+, Bravia Sync, SimpLink, Viera Link). |
 | 70cm antenna | A simple vertical is fine; a masthead preamp helps for weak signals. |
