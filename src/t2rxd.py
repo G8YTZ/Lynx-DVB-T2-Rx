@@ -33,8 +33,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import osd  # noqa: E402
 import fb as fbmod  # noqa: E402
+try:
+    import osdplane  # noqa: E402
+except (OSError, ImportError):          # no libdrm: fall back to blending
+    osdplane = None
 
-VERSION = "t2rx 1.1"
+VERSION = "t2rx 1.2"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -61,7 +65,8 @@ def log(msg):
 def read_conf():
     c = configparser.ConfigParser()
     c.read_dict({"receiver": {
-        "audio": "hdmi:CARD=vc4hdmi,DEV=0", "scale": "fix", "osd": "auto", "osd_timeout": "15",
+        "audio": "hdmi:CARD=vc4hdmi,DEV=0", "scale": "kms", "osd": "auto", "osd_timeout": "15",
+        "osd_plane": "auto",
         "cec": "yes", "cec_name": "Lynx DVB-T2 Rx", "cec_active_source": "yes",
         "adapter": "0", "loss_seconds": "5"}})
     c.read(CONF)
@@ -132,6 +137,13 @@ class Receiver:
         self.restart_at = None
         self.gen = 0                                      # pipeline generation (ignore stale callbacks)
         self.par = display_par() if self.cfg.get("scale") == "fix" else "1/1"
+        # OSD on its own display plane (zero-copy video, no per-frame CPU); else blend (1.1 method)
+        self.plane = None
+        if self.cfg.get("osd_plane", "auto") != "off" and osdplane is not None:
+            try:
+                self.plane = (osdplane.FakePlane() if ENV("T2RX_FAKEPLANE") else osdplane.OsdPlane())
+            except Exception as e:
+                log("OSD plane unavailable (%s) - blending the OSD instead" % e)
         self.safe_mode = False       # set if the OSD chain keeps failing: play without it
         self.fails = 0               # player errors since the last picture
 
@@ -218,7 +230,13 @@ class Receiver:
         q = "leaky=downstream max-size-time=2000000000 max-size-bytes=0 max-size-buffers=0"
         vsink = ENV("T2RX_VSINK", "kmssink name=vsink")
         dec = ENV("T2RX_DECODER", "v4l2h264dec")
-        if self.safe_mode:
+        if self.plane is not None:
+            # zero-copy: decoder DMABuf frames straight to the video plane; the OSD
+            # is on a separate plane mixed by the display hardware
+            vsink = ENV("T2RX_VSINK", "kmssink name=vsink fd=%d plane-id=%d"
+                        % (self.plane.fd, self.plane.video_plane))
+            vchain = "%s ! identity name=vprobe silent=true ! %s" % (dec, vsink)
+        elif self.safe_mode:
             # plain chain that is known to play (no OSD, no shape fix)
             vchain = "%s ! identity name=vprobe silent=true ! %s" % (dec, vsink)
         else:
@@ -358,6 +376,8 @@ class Receiver:
             self.osd_el = None
         self.video_on = False
         self.last_osd = None
+        if self.plane is not None:
+            self.plane.hide()
 
     def stop(self):
         self.gen += 1
@@ -412,9 +432,22 @@ class Receiver:
             box = osd.idle_card_box(self.fb.w, self.fb.h)
             self.fb.show(img.crop(box), box[:2])
 
+    def _osd_key(self, mode):
+        """What the panel shows, at display resolution: redraw only when it changes."""
+        st, info = self.st, self.info
+        if mode == "mini":
+            try:
+                bar = int(float(st.get("cnr", "-999")) / 35.0 * 22)
+            except ValueError:
+                bar = 0
+            return (mode, st.get("state"), bar, info.get("callsign"), info.get("preset"))
+        return (mode, tuple(sorted(st.items())), tuple(sorted((k, str(v)) for k, v in info.items())))
+
     def update_osd(self, force=False):
-        if not self.osd_el:
+        if self.plane is None and not self.osd_el:
             return
+        if self.plane is not None and not self.video_on:
+            return                                   # the plane OSD only goes over a picture
         mode = self.osd_mode
         now = time.monotonic()
         if mode == "auto":
@@ -423,13 +456,23 @@ class Receiver:
             mode = "mini"
         if mode == "off":
             if self.last_osd != "off":
-                self.osd_el.set_property("alpha", 0.0)
+                if self.plane is not None:
+                    self.plane.hide()
+                else:
+                    self.osd_el.set_property("alpha", 0.0)
                 self.last_osd = "off"
             return
-        key = (mode, tuple(sorted(self.st.items())), tuple(sorted((k, str(v)) for k, v in self.info.items())))
-        if not force and key == self.last_osd:
-            return
+        key = self._osd_key(mode)
+        if not force and (key == self.last_osd or now - getattr(self, "_osd_t", 0) < 1.0):
+            return                                   # unchanged, or redrawn within the last second
         self.last_osd = key
+        self._osd_t = now
+        if self.plane is not None:
+            s = self.plane.w / 800.0
+            img = osd.render_osd(self.plane.w, self.st, self.info, mode)
+            if self.plane.show(img, 24 * s, 20 * s) != 0:
+                log("OSD plane: SetPlane failed")
+            return
         img = osd.render_osd(self.video_w, self.st, self.info, mode)
         data = GLib.Bytes.new(img.tobytes())
         pb = GdkPixbuf.Pixbuf.new_from_bytes(data, GdkPixbuf.Colorspace.RGB, True, 8,
@@ -522,7 +565,9 @@ class Receiver:
                 os.replace(LOG, LOG + ".1")
         except OSError:
             pass
-        log("%s starting, preset %d, display PAR %s" % (VERSION, self.preset, self.par))
+        log("%s starting, preset %d, OSD %s" % (VERSION, self.preset,
+            ("on display plane %d (video plane %d)" % (self.plane.osd_plane, self.plane.video_plane))
+            if self.plane is not None else "blended (display PAR %s)" % self.par))
         fbmod.console(False)
         try:
             subprocess.run(["chvt", "1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
@@ -551,6 +596,8 @@ class Receiver:
                     f.write(str(val))
         except OSError:
             pass
+        if self.plane is not None:
+            self.plane.close()
         self.fb.blank()
         fbmod.console(True)
         self.loop.quit()

@@ -132,9 +132,9 @@ stock driver.
        |  pipe
     t2rxd.py (Python, GLib main loop)
        |- GStreamer: fdsrc ! tsparse ! tsdemux
-       |     video: h264parse ! v4l2h264dec ! I420 ! [capssetter] ! gdkpixbufoverlay ! kmssink
+       |     video: h264parse ! v4l2h264dec ! kmssink (zero-copy, video plane)
        |     audio: decodebin ! audioconvert ! audioresample ! alsasink (HDMI)
-       |- OSD: osd.py renders the panel (Pillow) -> gdkpixbufoverlay
+       |- OSD: osd.py renders the panel (Pillow) -> osdplane.py -> OSD plane
        |- status page: osd.py -> fb.py -> /dev/fb0 (when there is no picture)
        |- cec.py: cec-ctl - name, active source, remote keys
        |- control socket /run/t2rx.sock <- t2rx-ctl
@@ -174,17 +174,32 @@ logs why. A display problem never costs the picture.
 * **Status page**: drawn with Pillow straight onto the framebuffer (16- or
   32-bit), with only the live card redrawn each second (cheap on a Zero). The
   text console is unbound from the framebuffer while the receiver owns it.
-* **Picture**: `kmssink` puts the video on a hardware overlay plane above the
-  status page, scaled by the display hardware at no CPU cost.
-* **OSD**: an RGBA panel blended onto the decoded frames at video resolution,
-  and re-rendered only when a value changes.
-* **Picture shape.** `kmssink` works out the screen's pixel shape from the
+* **Picture**: `kmssink` puts the decoder's frames straight onto a hardware
+  overlay plane (zero-copy), above the status page, scaled by the display
+  hardware at no CPU cost.
+* **OSD on its own plane** (`osdplane.py`): the receiver opens the DRM device
+  itself, hands the same file descriptor to `kmssink` (so both work under one
+  DRM master), gives `kmssink` the lower overlay plane and puts the OSD - an
+  ARGB8888 dumb buffer, premultiplied alpha - on a higher one. The display
+  hardware (VC4 HVS) mixes them; the CPU only works when the panel is redrawn
+  (only when a shown value changes, at most once a second).
+
+  Why: blending the OSD onto every frame on a single-core Pi Zero W means
+  copying each frame out of the decoder and drawing on it. Measured with
+  `tools/zero_bench.sh` on the same recording: ordinary frames 49% CPU,
+  + blended OSD 79% - enough to starve the audio. Zero-copy video with the OSD
+  on a plane measured 51-66% *while redrawing twice a second on purpose*.
+  If no spare plane is found the receiver falls back to blending
+  (`osd_plane = off` forces it).
+* **Picture shape** (blended mode only). `kmssink` works out the screen's pixel shape from the
   monitor's reported physical size (EDID, in mm), snapped to a few standard
   values. Some monitors report a size that snaps wrongly: one test monitor
   claimed 350 x 190 mm, which snapped to 16:15 PAL pixels and made the picture
-  6.7% too narrow. With `scale = fix` the receiver calculates the same
-  snapped value and labels the picture with it, so the two cancel. On a monitor
-  that reports its size properly this does nothing.
+  6.7% too narrow. With `scale = fix` (and `osd_plane = off`) the receiver
+  calculates the same snapped value and labels the picture with it, so the two
+  cancel. Zero-copy frames can't be relabelled, so on such a monitor the plane
+  mode shows the picture slightly narrow; on a monitor that reports its size
+  properly (most TVs) there is no difference.
 
 ### 5.4 HDMI-CEC
 `cec-ctl` registers the receiver as a Playback device with an OSD name (up to
@@ -206,7 +221,9 @@ actions, ignoring auto-repeat.
 | `/run/t2rx.sock` | control: `status`, `preset N`, `next`, `prev`, `osd`, `back`, `reload` (use `t2rx-ctl`) |
 
 The service (`t2rx.service`) waits for the TV HAT, runs as root (the display,
-CEC monitor and driver overrides need it) and restarts on failure.
+CEC monitor and driver overrides need it) and restarts on failure. The
+installer masks PipeWire/WirePlumber: on images that have them they grab the
+HDMI sound device ("Device or resource busy").
 
 ### 5.6 Margin
 Margin = measured C/N minus the C/N the signalled mode needs, from typical

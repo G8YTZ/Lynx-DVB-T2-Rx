@@ -18,7 +18,7 @@ echo "== Program -> /opt/t2rx"
 sudo mkdir -p /opt/t2rx /etc/t2rx /var/lib/t2rx
 gcc -O2 -Wall -o src/t2rx src/t2rx.c
 sudo install -m 755 src/t2rx src/t2rxd.py /opt/t2rx/
-sudo install -m 644 src/osd.py src/fb.py src/cec.py /opt/t2rx/
+sudo install -m 644 src/osd.py src/fb.py src/cec.py src/osdplane.py /opt/t2rx/
 sudo install -m 755 src/t2rx-ctl /usr/local/bin/t2rx-ctl
 
 echo "== Settings -> /etc/t2rx (existing files are kept)"
@@ -26,11 +26,18 @@ echo "== Settings -> /etc/t2rx (existing files are kept)"
 [ -f /etc/t2rx/presets.conf ] || sudo install -m 644 config/presets.conf /etc/t2rx/
 # upgrade old defaults (anything you changed yourself is left alone)
 sudo sed -i 's/^cec_name = G8YTZ T2 Rx$/cec_name = Lynx DVB-T2 Rx/; s/^osd_timeout = 8$/osd_timeout = 15/' /etc/t2rx/t2rx.conf
+grep -q "^osd_plane" /etc/t2rx/t2rx.conf || echo "osd_plane = auto" | sudo tee -a /etc/t2rx/t2rx.conf >/dev/null
 
 echo "== Service"
 sudo systemctl disable --now t2box 2>/dev/null || true      # early test version
 sudo install -m 644 config/t2rx.service /etc/systemd/system/t2rx.service
 sudo systemctl daemon-reload
+
+echo "== Desktop sound servers off (they grab the HDMI sound)"
+sudo systemctl --global mask pipewire.socket pipewire.service pipewire-pulse.socket \
+  pipewire-pulse.service wireplumber.service 2>/dev/null || true
+systemctl --user stop pipewire.socket pipewire.service pipewire-pulse.socket \
+  pipewire-pulse.service wireplumber.service 2>/dev/null || true
 
 echo "== Boot to the receiver, not a desktop"
 sudo systemctl set-default multi-user.target

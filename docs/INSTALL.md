@@ -75,7 +75,7 @@ Edit `/etc/t2rx/presets.conf` (up to nine):
 
 Other settings are in `/etc/t2rx/t2rx.conf`: HDMI audio device (or `none`),
 OSD mode (`auto`, `full`, `mini`, `off`) and timeout, the name the TV shows,
-and whether to switch the TV over at start-up.
+whether to switch the TV over at start-up, and `osd_plane` (leave on `auto`).
 
 ## 6. First test
 Set the transmitter to match preset 1. For a Portsdown 4 with the DVB-T2
@@ -122,9 +122,10 @@ TV's input list as **Lynx DVB-T2 Rx**.
 | NO SIGNAL | Check frequency, bandwidth and antenna. 1350/2000 need the patched driver; the status page warns if it's missing (below). |
 | LOCKED - waiting for picture, and no picture | The video must be **H.264** (a Zero can't decode H.265). Check `grep -E "error|safe" /var/log/t2rx.log`. |
 | Picture but no OSD | The receiver is in safe mode after repeated player errors; the log says why. |
-| No sound | Check `audio` in `t2rx.conf`, then test HDMI sound: `speaker-test -D hdmi:CARD=vc4hdmi,DEV=0 -c 2 -t sine -l 1` |
+| No sound | First check the transmission has sound (e.g. on another receiver). Check `audio` in `t2rx.conf`, then test HDMI sound with the receiver stopped: `speaker-test -D hdmi:CARD=vc4hdmi,DEV=0 -c 2 -t sine -l 1`. "Device or resource busy" means something else has the sound device: `sudo fuser -v /dev/snd/*` |
+| Sound breaks up | Check `t2rx.log` says `OSD on display plane`. If it says `blended`, the Pi's CPU is overloaded; a Zero 2 W has headroom. |
 | Remote does nothing | Enable CEC on the TV; try another HDMI input; `cec-ctl` should show the Pi. |
-| Picture slightly too narrow or wide | Leave `scale = fix` (the default); it corrects for monitors that report their size wrongly. |
+| Picture slightly too narrow or wide | The monitor reports its size wrongly (common on small Pi displays; TVs are fine). Set `osd_plane = off` and `scale = fix` to correct it, at the cost of more CPU. |
 
 ![Status page warning that the patched driver is missing](images/status_driver_warning.png)
 

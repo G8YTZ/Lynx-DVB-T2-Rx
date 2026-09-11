@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2
+* **OSD on its own display plane.** The video now goes to the screen zero-copy
+  (straight from the hardware decoder) and the OSD sits on a second hardware
+  plane, mixed by the display hardware - no per-frame CPU. On a Pi Zero W the
+  1.1 method (copy every frame, blend the OSD) used ~80% CPU and starved the
+  audio; the plane method fixes the sound break-up. Falls back to blending if
+  the display has no spare plane (`osd_plane = off` forces the old method).
+* OSD redrawn only when a shown value changes, at most once a second, and
+  drawn at the monitor's full resolution (sharper).
+* Default `scale = kms` (the shape fix only applies to the blended OSD).
+* Installer masks the desktop sound servers (PipeWire/WirePlumber), which could
+  grab the HDMI sound.
+* tools/: `zero_bench.sh` (CPU of each video path) and `osd_plane_test.py`.
+
 ## 1.1
 * Fix: no picture on the Pi - the hardware decoder's DMABuf frames couldn't pass
   the pixel-shape fix and OSD stages; the chain now asks for I420 frames.
