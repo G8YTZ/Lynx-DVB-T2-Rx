@@ -128,10 +128,10 @@ stock driver.
 ## 5. Receiver software
     TV HAT (CXD2880)
        |  /dev/dvb/adapter0
-    t2rx (C) --- tune, lock, whole TS over UDP, status -> /run/t2rx.status
-       |  UDP 127.0.0.1:9960
+    t2rx (C) --- tune, lock, hold back to the first keyframe, TS to a pipe, status
+       |  pipe
     t2rxd.py (Python, GLib main loop)
-       |- GStreamer: udpsrc ! tsparse ! tsdemux
+       |- GStreamer: fdsrc ! tsparse ! tsdemux
        |     video: h264parse ! v4l2h264dec ! kmssink (zero-copy, video plane)
        |     audio: decodebin ! audioconvert ! audioresample ! alsasink (HDMI)
        |- OSD: osd.py renders the panel (Pillow) -> osdplane.py -> OSD plane
@@ -141,9 +141,11 @@ stock driver.
 
 ### 5.1 t2rx
 A small C program using the Linux DVB API directly. It sets up DVB-T2 at the
-preset frequency, passes every PID to the DVR device and sends the transport
-stream to the player as UDP datagrams of seven packets on localhost (`-u`), or
-to stdout without it. It retunes every 10 s until lock, and exits with status 2
+preset frequency, passes every PID to the DVR device and copies the transport
+stream to its output (stdout; `-u` sends UDP instead). Until the first H.264
+keyframe it passes only the tables (PAT, PMT, SDT): the **keyframe gate**
+(`tsgate.h`) reads the PAT and PMT to find the video PID, holds each video PES
+start, and opens at the start of the first PES that carries an SPS. It retunes every 10 s until lock, and exits with status 2
 if lock is lost for `loss_seconds`, so the supervisor can restart the player
 cleanly. Twice a second it writes the status file:
 
@@ -153,13 +155,16 @@ cleanly. Twice a second it writes the status file:
 from the demodulator), so the OSD shows the real mode on air.
 
 ### 5.2 The player, and four lessons
-* **Live source, or delay builds up.** Fed through a pipe, the player queued
-  everything that arrived while the decoder waited for the first keyframe, then
-  played from the start of that queue: the keyframe wait (often seconds) became
-  permanent delay. `udpsrc` is a live source, so playback follows arrival time
-  and late data is dropped. Joining mid-GOP with 8 s to the next keyframe, delay
-  fell from 8.4 s to 2.0 s. A transmitter keyframe every 1-2 s shortens the
-  wait for the first picture too.
+* **Delay versus clean sound.** Fed through a pipe, the player queued everything
+  that arrived while the decoder waited for the first keyframe, then played from
+  the start of that queue: the keyframe wait became permanent delay (8.4 s
+  measured). Making it a live source (UDP, 1.3) cut that to 2 s but broke the
+  sound: the T2 demodulator delivers data in bursts about a T2 frame (250 ms)
+  apart, a live source timestamps by arrival, and the sound output kept
+  resyncing - a gap, then a catch-up. The answer (1.5) is a pipe, timed by the
+  stream's own timestamps, plus the tuner's keyframe gate, so there is no
+  backlog to play late. Delay is now little more than the pipeline's own. A
+  transmitter keyframe every 1-2 s shortens the wait for the first picture.
 * **Keyframes and queues.** After lock the decoder must wait for the next
   keyframe, which can be seconds away. With size-limited queues the audio queue
   filled first, blocked the demultiplexer and starved the video: a silent
@@ -182,8 +187,10 @@ logs why. A display problem never costs the picture.
 The Pi Zero W has one CPU core, so anything that briefly takes it (an OSD
 redraw, a background job) can leave the sound card empty for a moment - a
 break-up you mostly hear on speech. Three defences:
-* a **1 s ALSA buffer** (`audio_buffer_ms`; GStreamer's default is 0.2 s). The
-  picture is delayed by the same amount to keep lip-sync;
+* a **sound buffer** (`audio_buffer_ms`, 200 ms; raise it if needed - the
+  picture is delayed by the same amount to keep lip-sync). Measured on the Zero,
+  the sound card never ran low: the gaps heard in 1.3/1.4 came from resyncs,
+  not starvation (5.2);
 * the OSD is redrawn at most every 2 s, on a thread that lowers its own
   priority (nice 15), while the service runs at nice -5;
 * **headroom**: `audio_volume` 0.8 before conversion to 16-bit, because AAC

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5
+* **Sound gaps fixed, delay kept low.** 1.3's live UDP feed timed the audio by
+  arrival, and the T2 demodulator delivers data in frame-sized bursts (about
+  250 ms), so the sound output kept resyncing: gaps, then a catch-up. 1.5 goes
+  back to the pipe feed (timing from the stream's own timestamps, as r4, which
+  had clean sound) and removes the delay differently: the tuner holds the
+  stream back until the first H.264 keyframe (`tsgate.h`), so the player never
+  stores seconds of undecodable video. Measured joining mid-GOP: delay ~0 s
+  beyond the pipeline's own (1.2: 8.4 s, 1.3: 2.0 s).
+* Sound buffer back to 200 ms (`audio_buffer_ms`); queues are size-limited and
+  never drop data. The installer tidies hand-edited `audio` lines.
+
 ## 1.4
 * Sound: 1 s audio buffer (`audio_buffer_ms`, was ALSA's 0.2 s) so short CPU
   peaks on a Pi Zero can't break it up; `audio_volume` 0.8 leaves headroom for

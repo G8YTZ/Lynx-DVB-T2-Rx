@@ -26,6 +26,7 @@
 #include <sys/socket.h>
 #include <linux/dvb/dmx.h>
 #include <linux/dvb/frontend.h>
+#include "tsgate.h"
 
 static double now(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec + t.tv_nsec / 1e9; }
 
@@ -111,6 +112,7 @@ static void usage(void)
     fprintf(stderr,
         "usage: t2rx -f FREQ_HZ [-b 1.7|MHz|Hz] [-a adapter] [-p plp] [-s status_file]\n"
         "            [-l loss_seconds] [-u udp_port] [-q]\n"
+        "  -G  don't hold the stream back until the first H.264 keyframe\n"
         "  -u  send the TS as UDP (7 packets per datagram) to 127.0.0.1:port\n"
         "      instead of stdout - a live source for the player, so it never builds a backlog\n"
         "  -b  bandwidth given to the driver (default 1.7). For 1.35/2 MHz with the\n"
@@ -120,11 +122,11 @@ static void usage(void)
 int main(int argc, char** argv)
 {
     unsigned freq = 0, bw_hz = 1712000;
-    int adapter = 0, plp = 0, quiet = 0, udp_port = 0;
+    int adapter = 0, plp = 0, quiet = 0, udp_port = 0, gate_on = 1;
     double loss = 5;
     const char* statf = NULL;
     int c;
-    while ((c = getopt(argc, argv, "f:b:a:p:s:l:u:qh")) != -1) {
+    while ((c = getopt(argc, argv, "f:b:a:p:s:l:u:Gqh")) != -1) {
         switch (c) {
         case 'f': freq = (unsigned)strtoul(optarg, NULL, 10); break;
         case 'b': { double v = atof(optarg);
@@ -135,6 +137,7 @@ int main(int argc, char** argv)
         case 'l': loss = atof(optarg); break;
         case 'q': quiet = 1; break;
         case 'u': udp_port = atoi(optarg); break;
+        case 'G': gate_on = 0; break;
         default: usage(); return 1;
         }
     }
@@ -173,6 +176,9 @@ int main(int argc, char** argv)
     static unsigned char pend[188 * 7];      /* UDP: whole 7-packet datagrams */
     size_t npend = 0;
     static unsigned char buf[188 * 1024];
+    static unsigned char gbuf[188 * 1024 + sizeof ((tsgate*)0)->pes];
+    static tsgate gate;
+    tsgate_init(&gate);
     double t_tune = now(), t_stat = 0, t_unlock = 0, t_start = now();
     int locked = 0, ever = 0;
     unsigned long long bytes = 0, bytes_last = 0;
@@ -181,10 +187,19 @@ int main(int argc, char** argv)
         int r = poll(&pf, 1, 100);
         if (r > 0 && (pf.revents & POLLIN)) {
             ssize_t n = read(dvr, buf, sizeof buf);
+            unsigned char* obuf = buf;
+            if (n > 0) n -= n % 188;
+            if (n > 0 && gate_on && !gate.open) {
+                /* hold back everything but the tables until the first keyframe */
+                n = (ssize_t)tsgate_filter(&gate, buf, (size_t)n, gbuf);
+                obuf = gbuf;
+                if (gate.open && !quiet)
+                    fprintf(stderr, "t2rx: keyframe - stream open (%lu packets held back)\n", gate.dropped);
+            }
             if (n > 0 && us >= 0) {
                 for (ssize_t i = 0; i < n; ) {
                     size_t take = (size_t)(n - i) < sizeof pend - npend ? (size_t)(n - i) : sizeof pend - npend;
-                    memcpy(pend + npend, buf + i, take);
+                    memcpy(pend + npend, obuf + i, take);
                     npend += take; i += take;
                     if (npend == sizeof pend) {
                         sendto(us, pend, npend, 0, (struct sockaddr*)&ua, sizeof ua);
@@ -195,7 +210,7 @@ int main(int argc, char** argv)
             } else if (n > 0) {
                 ssize_t w = 0;
                 while (w < n) {
-                    ssize_t k = write(1, buf + w, n - w);
+                    ssize_t k = write(1, obuf + w, n - w);
                     if (k < 0) { if (errno == EINTR) continue; return 0; }   /* player gone */
                     w += k;
                 }
