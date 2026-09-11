@@ -3,8 +3,8 @@
 From a bare Raspberry Pi to a receiver that boots into a picture. Allow about
 an hour on a Pi Zero, most of it waiting for downloads and builds.
 
-> Tested on a **Raspberry Pi Zero W v1.1** only. Other boards with a hardware
-> H.264 decoder (Zero 2 W, Pi 3, Pi 4) should work the same way.
+> **Tested on the Raspberry Pi Zero W v1.1 only.** These steps have not been
+> tried on any other board.
 
 ## 1. Hardware
 1. Fit the **TV HAT** to the Pi's 40-pin header. A Zero needs a header: buy a

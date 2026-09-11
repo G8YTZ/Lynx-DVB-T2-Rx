@@ -210,8 +210,8 @@ DVB-T2 figures (e.g. QPSK 1/2 about 2 dB, 16QAM 1/2 about 7 dB, 64QAM 2/3
 about 14 dB). Treat it as a guide: green 3 dB or more, amber 0-3 dB, red below.
 
 ## 6. Testing and compatibility
-* **Receiver:** Raspberry Pi Zero W v1.1, Raspberry Pi OS Lite (32-bit). The
-  only board tested so far.
+* **Receiver:** Raspberry Pi Zero W v1.1, Raspberry Pi OS Lite (32-bit). This
+  is the only board tested; nothing has been tried on other Pis yet.
 * **Transmitter:** Portsdown 4 with the DVB-T2 option (`dvb_t2_stack`, built on
   the GNU Radio gr-dtv DVB-T2 code), LimeSDR Mini, 436 MHz.
 * **Results:** locked at 1.7 MHz with the stock driver and 1.35 / 1.5 / 1.75 /

@@ -1,5 +1,8 @@
 # Lynx DVB-T2 Receiver
 
+> **Tested on the Raspberry Pi Zero W v1.1 only.** Other boards have not been
+> tried yet - reports welcome.
+
 **A low-cost DVB-T2 receiver for Amateur Television.** A Raspberry Pi and the
 £20 Raspberry Pi TV HAT, straight to HDMI: it boots into a working receiver,
 locks in about two seconds, and puts a Lynx-style on-screen display over the
@@ -37,7 +40,7 @@ on digital ATV for very little.
 ## Hardware
 | Item | Notes |
 |---|---|
-| Raspberry Pi **Zero W v1.1** | **The only board tested so far.** Zero 2 W, Pi 3 and Pi 4 should work (same software, more headroom) but are untested. Pi 5 is not suitable: it has no hardware H.264 decoder. |
+| Raspberry Pi **Zero W v1.1** | **The only board tested.** Other Pis with a hardware H.264 decoder (Zero 2 W, Pi 3, Pi 4) have not been tried. The Pi 5 won't work: it has no hardware H.264 decoder. |
 | Raspberry Pi **TV HAT** | Sony CXD2880 DVB-T/T2 tuner. Needs the Pi's 40-pin header fitted (Zero WH, or solder one on). |
 | microSD card | 8 GB or larger. |
 | Power supply | Good quality 5 V micro-USB, 2.5 A recommended. |
