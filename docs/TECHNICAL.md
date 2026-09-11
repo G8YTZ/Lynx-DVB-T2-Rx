@@ -52,9 +52,13 @@ Sony did build (for 1.7 MHz), stretches easily - so the receiver is DVB-T2 only.
 \* QPSK, LDPC 1/2, guard 1/8, 2K FFT, as sent by the Portsdown DVB-T2 option.
 
 * **1700** is standard DVB-T2 1.7 MHz. It works with every T2 receiver
-  without modification, so it's the default and the recommended channel. Note
-  that it uses the special T2 clock of 131/71 MHz, not 8/7 x 1.7 MHz. That is
-  why some receivers are set to "1614" to fake it; use **1700** here.
+  without modification, so it's the default and the recommended channel. Its
+  sample clock is 131/71 MHz (1.845 MS/s), not 8/7 x 1.7 MHz. Under the usual
+  amateur convention (sample rate = 8/7 x bandwidth) that clock is a
+  **1.614 MHz** signal, which is why the same standard channel is also quoted
+  as 1614 - for example in the Ryde's release notes. **1700 here and 1614
+  there are the same transmission.** A modulator that applies the 8/7 rule
+  gets within 0.03% of the standard clock when set to 1614.
 * **2000** follows the usual amateur rule (sample rate = 8/7 x bandwidth). It
   carries the most, and the Knucker receives it on both the Portsdown and the
   Ryde.
