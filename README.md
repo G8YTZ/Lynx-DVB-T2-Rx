@@ -10,7 +10,7 @@ picture. It deliberately supports **1.35, 1.7 and 2.0 MHz** channels, narrow
 enough for 70cm and chosen to work with the transmitters and receivers
 amateurs already have.
 
-![Status page](docs/images/status_page.png)
+![The on-screen display over the picture](docs/images/osd_full.png)
 
 ## Why
 New licensees usually have a simple vertical, not a beam, and a path full of
@@ -35,7 +35,15 @@ on digital ATV for very little.
 * **Nine presets**, each with its own frequency and bandwidth.
 * **Hardware H.264 decoding**, and the right picture shape on any monitor.
 
-![OSD over the picture](docs/images/osd_full.png)
+## Screens
+Rendered by the receiver's own code.
+
+| | |
+|---|---|
+| ![Searching](docs/images/status_searching.png) | ![Locked](docs/images/status_page.png) |
+| **Searching** - signal found, not locked yet | **Locked** - waiting for the first picture |
+| ![Full OSD](docs/images/osd_full.png) | ![Callsign badge](docs/images/osd_mini.png) |
+| **Full OSD** - for 15 s after lock or a preset change | **Callsign badge** - the rest of the time |
 
 ## Hardware
 | Item | Notes |

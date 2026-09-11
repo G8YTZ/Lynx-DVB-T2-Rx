@@ -85,6 +85,14 @@ the quickest picture after lock.
 
 On the receiver's screen you should see the status page go from
 **NO SIGNAL** to **SEARCHING** to **LOCKED**, then the picture with the OSD.
+
+| | | |
+|---|---|---|
+| ![No signal](images/status_nosignal.png) | ![Searching](images/status_searching.png) | ![Locked](images/status_page.png) |
+| No signal | Searching | Locked |
+
+![Picture with the OSD](images/osd_full.png)
+
 From SSH:
 
     t2rx-ctl status            # everything the receiver knows
@@ -109,12 +117,14 @@ TV's input list as **Lynx DVB-T2 Rx**.
 | Symptom | What to do |
 |---|---|
 | A desktop or login prompt instead of the status page | `sudo systemctl set-default multi-user.target` then reboot. The receiver needs the display to itself. |
-| NO SIGNAL | Check frequency, bandwidth and antenna. 1350/2000 need the patched driver (the status page warns if it's missing). |
+| NO SIGNAL | Check frequency, bandwidth and antenna. 1350/2000 need the patched driver; the status page warns if it's missing (below). |
 | LOCKED - waiting for picture, and no picture | The video must be **H.264** (a Zero can't decode H.265). Check `grep -E "error|safe" /var/log/t2rx.log`. |
 | Picture but no OSD | The receiver is in safe mode after repeated player errors; the log says why. |
 | No sound | Check `audio` in `t2rx.conf`, then test HDMI sound: `speaker-test -D hdmi:CARD=vc4hdmi,DEV=0 -c 2 -t sine -l 1` |
 | Remote does nothing | Enable CEC on the TV; try another HDMI input; `cec-ctl` should show the Pi. |
 | Picture slightly too narrow or wide | Leave `scale = fix` (the default); it corrects for monitors that report their size wrongly. |
+
+![Status page warning that the patched driver is missing](images/status_driver_warning.png)
 
 ## Updating
     cd ~/Lynx-DVB-T2-Rx && git pull && ./install.sh
