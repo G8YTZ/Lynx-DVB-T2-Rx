@@ -30,7 +30,8 @@ grep -q "^osd_plane" /etc/t2rx/t2rx.conf || echo "osd_plane = auto" | sudo tee -
 # strip any hand-added ALSA options from the audio line (buffer is its own setting)
 sudo sed -i 's/^\(audio = [^ ]*\) .*$/\1/' /etc/t2rx/t2rx.conf
 sudo sed -i 's/^audio_buffer_ms = 1000$/audio_buffer_ms = 200/' /etc/t2rx/t2rx.conf
-for kv in "audio_buffer_ms = 200" "audio_volume = 0.8" "osd_interval = 2"; do
+for kv in "audio_buffer_ms = 200" "audio_volume = 0.8" "osd_interval = 2" \
+          "start_buffer_ms = 1500" "max_buffer_ms = 8000"; do
   grep -q "^${kv%% *}" /etc/t2rx/t2rx.conf || echo "$kv" | sudo tee -a /etc/t2rx/t2rx.conf >/dev/null
 done
 

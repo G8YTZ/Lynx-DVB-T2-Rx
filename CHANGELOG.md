@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6
+* **Start cushion.** The player starts paused and plays once 1.5 s of stream is
+  stored (`start_buffer_ms`). 1.5 started with almost nothing in hand, so the
+  sound glitched every few seconds until a cushion built up - or never, with a
+  slow transmitter. The cushion covers the T2 demodulator's frame bursts, the
+  transmitter's audio/video mux offset (measured up to 1.4 s on a Portsdown)
+  and small clock differences. About 1.5 s more delay.
+* If a fast transmitter builds the store past `max_buffer_ms` (8 s) the player
+  restarts with a normal cushion, so the delay can't grow without limit.
+* tools/: `ptsdrift.py` (transmitter clock and audio/video offset against the
+  Pi's clock) and `ptsjumps.py` (irregular timestamp steps).
+
 ## 1.5
 * **Sound gaps fixed, delay kept low.** 1.3's live UDP feed timed the audio by
   arrival, and the T2 demodulator delivers data in frame-sized bursts (about

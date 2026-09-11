@@ -183,6 +183,28 @@ from the demodulator), so the OSD shows the real mode on air.
 receiver drops the OSD and pixel-shape stages and plays the plain chain, and
 logs why. A display problem never costs the picture.
 
+### 5.2a Transmitter timing, and the start cushion
+A receiver that plays in real time depends on the transmitter's timestamps
+keeping real time too (MPEG allows +/-30 ppm for the programme clock). Measured
+from the air with `tools/ptsdrift.py` against the Pi's network-set clock:
+
+| Portsdown 4 source | Programme clock | Notes |
+|---|---|---|
+| Test card | -13 ppm | fine |
+| ATEM 1080p25 via Elgato Cam Link | about -15 ppm | fine |
+| Logitech C920 webcam, 15 fps | **-19,600 ppm (2% slow)** | picture and sound together; frames stamped at a nominal 1/15 s while the camera delivers fewer |
+
+A 2%-slow stream starves any player that keeps real time (VLC-based receivers
+such as the Ryde follow it, with the sound 2% flat). This is a transmitter
+fault, independent of the modulation (DVB-S2 too); a transmitter should take
+its timestamps from a real clock - ideally GPS-disciplined.
+
+Even a good transmitter needs a **start cushion**: the T2 demodulator delivers
+data in bursts about 250 ms apart, and a Portsdown multiplexes its audio up to
+~1.4 s behind the matching video. So the player starts paused and plays once
+`start_buffer_ms` (1.5 s) is stored; if a fast transmitter builds the store
+past `max_buffer_ms` (8 s) the player restarts.
+
 ### 5.3 Sound on a single core
 The Pi Zero W has one CPU core, so anything that briefly takes it (an OSD
 redraw, a background job) can leave the sound card empty for a moment - a

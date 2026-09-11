@@ -38,7 +38,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.5"
+VERSION = "t2rx 1.6"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -67,7 +67,7 @@ def read_conf():
     c.read_dict({"receiver": {
         "audio": "hdmi:CARD=vc4hdmi,DEV=0", "scale": "kms", "osd": "auto", "osd_timeout": "15",
         "osd_plane": "auto", "audio_buffer_ms": "200", "audio_volume": "0.8",
-        "osd_interval": "2",
+        "osd_interval": "2", "start_buffer_ms": "1500", "max_buffer_ms": "8000",
         "cec": "yes", "cec_name": "Lynx DVB-T2 Rx", "cec_active_source": "yes",
         "adapter": "0", "loss_seconds": "5"}})
     c.read(CONF)
@@ -149,6 +149,9 @@ class Receiver:
         self._osd_event = threading.Event()
         if self.plane is not None:
             threading.Thread(target=self._osd_worker, daemon=True).start()
+        self.playing = False
+        self.pause_t = 0.0
+        self.over_t = None
         self.safe_mode = False       # set if the OSD chain keeps failing: play without it
         self.fails = 0               # player errors since the last picture
 
@@ -261,7 +264,7 @@ class Receiver:
         # live UDP feed made the audio resync - gaps then catch-up).
         desc = ("fdsrc fd=%d ! queue max-size-bytes=4000000 max-size-time=0 max-size-buffers=0 ! "
                 "tsparse ! tsdemux name=d latency=400 "
-                "d. ! video/x-h264 ! queue %s ! h264parse ! %s " % (fd, q, vchain))
+                "d. ! video/x-h264 ! queue name=vq %s ! h264parse ! %s " % (fd, q, vchain))
         audio = self.cfg.get("audio", "none")
         if audio != "none":
             buf = int(float(self.cfg.get("audio_buffer_ms", "1000")) * 1000)     # microseconds
@@ -270,7 +273,7 @@ class Receiver:
             vol = float(self.cfg.get("audio_volume", "0.8"))
             # volume < 1 leaves headroom: AAC decoding can overshoot full scale on
             # peaks, which clips (crackles) when converted to 16-bit
-            desc += ("d. ! audio/mpeg ! queue %s ! decodebin ! audioconvert ! volume volume=%.2f ! "
+            desc += ("d. ! audio/mpeg ! queue name=aq %s ! decodebin ! audioconvert ! volume volume=%.2f ! "
                      "audioconvert ! audioresample ! %s" % (q, vol, asink))
         return desc
 
@@ -294,7 +297,13 @@ class Receiver:
         bus = self.pipe.get_bus()
         bus.add_signal_watch()
         bus.connect("message", self._on_bus, self.gen)
-        self.pipe.set_state(Gst.State.PLAYING)
+        # Start PAUSED and let a cushion build before playing: it rides over the T2
+        # demodulator's frame-sized bursts, the transmitter's audio-behind-video mux
+        # offset (up to ~1.4 s measured on a Portsdown), and small clock differences.
+        self.playing = False
+        self.pause_t = 0.0
+        self.over_t = None
+        self.pipe.set_state(Gst.State.PAUSED)
 
     def _first_frame(self, pad, info, gen):
         caps = pad.get_current_caps()
@@ -415,12 +424,50 @@ class Receiver:
         except OSError:
             pass
 
+    def _buffered(self):
+        """Seconds of stream waiting to be played (audio if there is sound, else video)."""
+        if not self.pipe:
+            return 0.0
+        for name in ("aq", "vq"):
+            q = self.pipe.get_by_name(name)
+            if q is not None:
+                return q.get_property("current-level-time") / 1e9
+        return 0.0
+
+    def _pace(self):
+        if not self.pipe:
+            return
+        lvl = self._buffered()
+        now = time.monotonic()
+        if not self.playing:
+            start = float(self.cfg.get("start_buffer_ms", "1500")) / 1000.0
+            if lvl > 0 and not self.pause_t:
+                self.pause_t = now               # stream has started to arrive (after the keyframe)
+            if lvl >= start or (self.pause_t and now - self.pause_t > 5):
+                log("playing with %.1f s buffered" % lvl)
+                self.playing = True
+                self.pipe.set_state(Gst.State.PLAYING)
+            return
+        # a fast transmitter slowly builds the cushion (and the delay); if it gets
+        # beyond max_buffer_ms for 10 s, start again with a normal cushion
+        cap = float(self.cfg.get("max_buffer_ms", "8000")) / 1000.0
+        if lvl > cap:
+            if self.over_t is None:
+                self.over_t = now
+            elif now - self.over_t > 10:
+                log("%.1f s buffered - transmitter running fast; restarting the player" % lvl)
+                self.over_t = None
+                self._restart_soon(0.5)
+        else:
+            self.over_t = None
+
     def tick(self):
         if self.restart_at and time.monotonic() >= self.restart_at:
             self.restart_at = None
             self.start()
             return True
         self.read_status()
+        self._pace()
         if self.video_on:
             if not self.info.get("audio"):
                 self._audio_info()
