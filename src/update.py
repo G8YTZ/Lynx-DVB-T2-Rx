@@ -13,7 +13,8 @@ import subprocess
 import urllib.request
 
 REPO = "G8YTZ/Lynx-DVB-T2-Rx"
-API = "https://api.github.com/repos/%s/releases/latest" % REPO
+API_RELEASE = "https://api.github.com/repos/%s/releases/latest" % REPO
+API_TAGS = "https://api.github.com/repos/%s/tags?per_page=30" % REPO
 
 
 def _ver(s):
@@ -34,16 +35,35 @@ def find_checkout():
     return None
 
 
-def check(current, timeout=15):
-    """Latest release tag if it is newer than `current`, else None."""
+def _get(url, timeout):
+    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
+                                               "User-Agent": "lynx-dvbt2-rx"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)
+
+
+def latest(timeout=15):
+    """Newest version tag on GitHub, from the releases API, or the plain tag list
+    if no release has been published (a pushed tag is enough)."""
+    best = ""
     try:
-        req = urllib.request.Request(API, headers={"Accept": "application/vnd.github+json",
-                                                   "User-Agent": "lynx-dvbt2-rx"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            tag = json.load(r).get("tag_name", "")
+        best = _get(API_RELEASE, timeout).get("tag_name", "") or ""
     except Exception:
-        return None
-    return tag if _ver(tag) > _ver(current) else None
+        pass
+    try:
+        for t in _get(API_TAGS, timeout):
+            name = t.get("name", "")
+            if _ver(name) > _ver(best):
+                best = name
+    except Exception:
+        pass
+    return best or None
+
+
+def check(current, timeout=15):
+    """The newest tag on GitHub if it is newer than `current`, else None."""
+    tag = latest(timeout)
+    return tag if tag and _ver(tag) > _ver(current) else None
 
 
 def install(tag, log=print):

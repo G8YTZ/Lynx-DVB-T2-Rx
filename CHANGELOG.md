@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.2
+* Fix: the update check only asked for the latest GitHub *release*, which does
+  not exist until one is published, so pushed tags were never seen. It now
+  reads the tag list as well and takes whichever is newer - pushing a tag is
+  enough.
+
 ## 1.8.1
 * Fix: Up and Down were the wrong way round for presets. Up now moves up the
   on-screen preset list (to a lower number) and Down moves down it; CH+/CH-
