@@ -40,7 +40,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.2"
+VERSION = "t2rx 1.9.3"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -664,6 +664,10 @@ class Receiver:
         return d[:3] + "." + d[3:]
 
     def open_tune(self):
+        # the panel must show even if the OSD was hidden with BACK
+        if self.osd_mode == "off":
+            self.osd_mode = self.cfg.get("osd", "auto")
+        self.osd_until = time.monotonic() + 3600
         p = self.cur()
         f = "%06d" % int(round(p["freq"] * 1000))
         self.tune = {"digits": list(f), "pos": 0, "stage": "freq",
@@ -673,6 +677,7 @@ class Receiver:
 
     def close_tune(self):
         self.tune = None
+        self.osd_until = time.monotonic() + float(self.cfg.get("osd_timeout", "15"))
         self._redraw()
 
     def _tune_refresh(self):
@@ -786,10 +791,12 @@ class Receiver:
         return True
 
     def _redraw(self):
+        """Draw the tune panel wherever it will be seen: over the picture if there
+        is one, and on the status page as well, so it cannot end up hidden."""
+        self.last_osd = None
         if self.video_on:
             self.update_osd(force=True)
-        else:
-            self.draw_idle(force=True)
+        self.draw_idle(force=True)
 
     # ------------------------------------------------------------ control
     def key(self, name):

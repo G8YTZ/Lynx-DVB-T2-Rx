@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.3
+* Fix: the tune panel opened but could stay invisible - if the OSD had been
+  hidden with BACK, the panel inherited that. It now turns the OSD back on,
+  stays up until you leave it, and is drawn both over the picture and on the
+  status page.
+
 ## 1.9.2
 * **Remote lag fixed.** Every question the TV asked (power, menu, active source)
   started a new `cec-ctl` process to answer it; on a single-core Pi a flurry of
