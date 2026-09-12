@@ -40,7 +40,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.4"
+VERSION = "t2rx 1.9.5"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -438,6 +438,8 @@ class Receiver:
         self.last_osd = None
         if self.plane is not None:
             self.plane.hide()
+            self.plane.hide_video()      # else its last frame stays on screen, hiding the status page
+        self._idle_layout = None
 
     def stop(self):
         self.gen += 1

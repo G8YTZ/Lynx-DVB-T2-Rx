@@ -195,9 +195,15 @@ class OsdPlane:
         _drm.drmModeSetPlane(self.fd, self.osd_plane, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
         self.shown = False
 
+    def hide_video(self):
+        """Turn off the video plane. kmssink leaves its last frame on screen when
+        the player stops, and that frame covers the status page underneath."""
+        _drm.drmModeSetPlane(self.fd, self.video_plane, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+
     def close(self):
         if self.fd >= 0:
             self.hide()
+            self.hide_video()
             self._free_fb()
             os.close(self.fd)
             self.fd = -1
@@ -226,3 +232,6 @@ class FakePlane:
 
     def close(self):
         self.hide()
+
+    def hide_video(self):
+        pass

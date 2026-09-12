@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.5
+* Fix: the screen appeared frozen - changing preset or opening the tune panel
+  did nothing visible, though the log showed the keys working. When the player
+  stops, kmssink leaves its last frame on the video plane, and that frame
+  covered the status page and the tune panel underneath. The video plane is now
+  turned off with it.
+
 ## 1.9.4
 * The update message now stays on screen for the whole install and through the
   restart: the page shows "Installing update vX", the step it has reached
