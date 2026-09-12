@@ -24,7 +24,20 @@ def _ver(s):
 
 
 def _run(args, cwd, timeout=300):
-    return subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    return subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout, env=env)
+
+
+def _allow_dir(d, log):
+    """The receiver runs as root but the checkout belongs to pi, which modern git
+    refuses to touch ("dubious ownership") unless the path is marked safe."""
+    try:
+        r = _run(["git", "config", "--global", "--get-all", "safe.directory"], d, timeout=20)
+        if d not in (r.stdout or "").split():
+            _run(["git", "config", "--global", "--add", "safe.directory", d], d, timeout=20)
+            log("update: marked %s as safe for git" % d)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        log("update: %s" % e)
 
 
 def find_checkout():
@@ -72,9 +85,10 @@ def install(tag, log=print):
     if not d:
         log("update: no git checkout found - install manually")
         return False
+    _allow_dir(d, log)
     try:
-        for args in (["git", "fetch", "--tags", "--quiet"],
-                     ["git", "checkout", "--quiet", tag]):
+        for args in (["git", "fetch", "--tags", "--force", "--quiet"],
+                     ["git", "checkout", "--quiet", "--force", tag]):
             r = _run(args, d)
             if r.returncode:
                 log("update: %s failed: %s" % (args[1], (r.stderr or "").strip()[:200]))

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.1
+* Fix: automatic updates failed with git's "dubious ownership" error - the
+  receiver runs as root while the checkout belongs to the user. The updater now
+  marks the checkout safe for git (and install.sh does too), and forces the
+  checkout so local edits can't block an update.
+
 ## 1.9
 * **Tuning works with arrows and OK alone** - many TV and AV remotes (a Yamaha
   here) have no keypad and never pass the colour keys over CEC. **Tune...** now

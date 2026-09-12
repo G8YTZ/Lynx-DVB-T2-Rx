@@ -37,6 +37,9 @@ for kv in "audio_buffer_ms = 200" "audio_volume = 0.8" "osd_interval = 2" \
   grep -q "^${kv%% *}" /etc/t2rx/t2rx.conf || echo "$kv" | sudo tee -a /etc/t2rx/t2rx.conf >/dev/null
 done
 
+# the receiver runs as root but the checkout belongs to the user: let git use it
+sudo git config --global --add safe.directory "$(pwd)" 2>/dev/null || true
+
 echo "== Service"
 sudo systemctl disable --now t2box 2>/dev/null || true      # early test version
 sudo install -m 644 config/t2rx.service /etc/systemd/system/t2rx.service
