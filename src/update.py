@@ -79,20 +79,26 @@ def check(current, timeout=15):
     return tag if tag and _ver(tag) > _ver(current) else None
 
 
-def install(tag, log=print):
-    """Fetch and install `tag`. Returns True if the receiver should restart."""
+def install(tag, log=print, progress=None):
+    """Fetch and install `tag`. Returns True if the receiver should restart.
+    progress(text) is called as each step starts, for the screen."""
+    def step(t):
+        if progress:
+            progress(t)
     d = find_checkout()
     if not d:
         log("update: no git checkout found - install manually")
         return False
     _allow_dir(d, log)
     try:
-        for args in (["git", "fetch", "--tags", "--force", "--quiet"],
-                     ["git", "checkout", "--quiet", "--force", tag]):
+        for args, what in ((["git", "fetch", "--tags", "--force", "--quiet"], "Downloading"),
+                           (["git", "checkout", "--quiet", "--force", tag], "Unpacking")):
+            step(what)
             r = _run(args, d)
             if r.returncode:
                 log("update: %s failed: %s" % (args[1], (r.stderr or "").strip()[:200]))
                 return False
+        step("Installing - this takes a minute")
         r = _run(["./install.sh", "--no-boot"], d, timeout=1800)
         if r.returncode:
             log("update: install.sh failed: %s" % (r.stderr or r.stdout or "").strip()[-200:])
@@ -100,5 +106,6 @@ def install(tag, log=print):
     except (OSError, subprocess.TimeoutExpired) as e:
         log("update: %s" % e)
         return False
+    step("Restarting")
     log("update: installed %s" % tag)
     return True

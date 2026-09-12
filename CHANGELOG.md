@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.4
+* The update message now stays on screen for the whole install and through the
+  restart: the page shows "Installing update vX", the step it has reached
+  (Downloading / Unpacking / Installing / Restarting) and "do not switch off".
+  The receiver no longer retunes behind it, and the screen isn't blanked when
+  it restarts into the new version.
+
 ## 1.9.3
 * Fix: the tune panel opened but could stay invisible - if the OSD had been
   hidden with BACK, the panel inherited that. It now turns the OSD back on,

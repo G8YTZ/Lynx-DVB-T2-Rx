@@ -180,7 +180,9 @@ The same commands work locally: `t2rx-ctl tune 437.250 2000`,
 
 ## Updating
 The receiver updates itself: a minute after boot and once a day it checks
-GitHub for a new release. If there is one it appears on the status page, and
+GitHub for a new release. While one installs, the screen shows
+"Installing update vX" and the step it has reached; it takes about a minute on
+a Pi Zero, and the receiver comes back by itself on the new version. If there is one it appears on the status page, and
 when nothing is being received it installs it and restarts - never in the
 middle of a transmission. In `/etc/t2rx/t2rx.conf`:
 

@@ -40,7 +40,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.3"
+VERSION = "t2rx 1.9.4"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -185,6 +185,8 @@ class Receiver:
         self.tune = None             # on-screen tuning entry, see key()
         self.update_tag = None       # newer release found, shown on the status page
         self.updating = False
+        self.update_stage = ""
+        self.updating_exit = False
         self.safe_mode = False       # set if the OSD chain keeps failing: play without it
         self.fails = 0               # player errors since the last picture
 
@@ -259,7 +261,7 @@ class Receiver:
         GLib.idle_add(self._tuner_exited, rc, gen)
 
     def _tuner_exited(self, rc, gen):
-        if gen != self.gen:
+        if gen != self.gen or self.updating:
             return False
         log("tuner exited (%s) - retuning" % rc)
         self.message = ("SIGNAL LOST", osd.RED) if rc == 2 else None
@@ -488,19 +490,29 @@ class Receiver:
             return
         self.updating = True
         tag = self.update_tag
+        self.update_stage = "Starting"
         log("installing update %s" % tag)
         self.stop()
+        self.st = {"state": "-"}
         self.draw_idle(force=True)
 
         def work():
-            ok = updater.install(tag, log)
+            ok = updater.install(tag, log, progress=self._update_stage)
             GLib.idle_add(self._installed, ok)
         threading.Thread(target=work, daemon=True).start()
+
+    def _update_stage(self, text):
+        def show():
+            self.update_stage = text
+            self.draw_idle(force=True)
+            return False
+        GLib.idle_add(show)
 
     def _installed(self, ok):
         self.updating = False
         if ok:
             log("restarting into the new version")
+            self.updating_exit = True
             self.quit()                      # systemd Restart=always brings it back
         else:
             self.update_tag = None           # don't loop on a failure
@@ -545,6 +557,9 @@ class Receiver:
             self.over_t = None
 
     def tick(self):
+        if self.updating:                      # nothing but the update page while it installs
+            self.draw_idle()
+            return True
         if self.restart_at and time.monotonic() >= self.restart_at:
             self.restart_at = None
             self.start()
@@ -569,15 +584,22 @@ class Receiver:
         if not msg and self.st.get("state") == "LOCK" and not self.video_on:
             msg = ("LOCKED - waiting for picture", osd.GREEN)
         info = dict(self.info)
+        if self.tune is not None:
+            info.pop("update", None)
         if self.updating:
-            info["update"] = "Installing update %s - please wait" % self.update_tag
+            # the page becomes the update page until the new version starts
+            msg = ("Installing update %s" % self.update_tag, osd.INFO)
+            info = {"preset": self.preset, "name": "", "freq": self.cur()["freq"],
+                    "bw": self.cur()["bw"],
+                    "update": (self.update_stage or "Please wait") + " - do not switch off"}
         elif self.update_tag:
             info["update"] = "Update %s available%s" % (
                 self.update_tag, "" if self.cfg.get("updates", "auto") == "auto" else " - press OK to install")
         img = osd.render_idle(self.fb.w, self.fb.h, self.st, info, self.presets, msg, VERSION)
         # Only the status card changes second to second: redraw just that
         # unless the layout (preset, message, presets list) changed.
-        layout = (self.preset, msg, str(self.presets), self.info.get("warning"), self.fb.w, self.fb.h)
+        layout = (self.preset, msg, str(self.presets), self.info.get("warning"),
+                  self.fb.w, self.fb.h, self.update_stage, self.updating)
         if force or layout != getattr(self, "_idle_layout", None):
             self._idle_layout = layout
             self.fb.show(img)
@@ -990,8 +1012,9 @@ class Receiver:
             pass
         if self.plane is not None:
             self.plane.close()
-        self.fb.blank()
-        fbmod.console(True)
+        if not self.updating_exit:      # leave the update message up across the restart
+            self.fb.blank()
+            fbmod.console(True)
         self.loop.quit()
         return False
 
