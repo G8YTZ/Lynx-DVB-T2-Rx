@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.6
+* **Fix: it was possible to get stuck in the tune panel.** While the panel is
+  open it takes every key - and because the panel could be invisible (1.9.5),
+  the receiver looked completely dead: the remote did nothing, and the web page
+  did nothing either, because web commands went through the same path. Now the
+  web page and t2rx-ctl close the panel and act directly, and the panel closes
+  itself after 90 s with no keys.
+
 ## 1.9.5
 * Fix: the screen appeared frozen - changing preset or opening the tune panel
   did nothing visible, though the log showed the keys working. When the player

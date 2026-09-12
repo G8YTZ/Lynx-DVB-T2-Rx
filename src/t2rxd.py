@@ -40,7 +40,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.5"
+VERSION = "t2rx 1.9.6"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -183,6 +183,7 @@ class Receiver:
         self.pause_t = 0.0
         self.over_t = None
         self.tune = None             # on-screen tuning entry, see key()
+        self.tune_t = 0.0
         self.update_tag = None       # newer release found, shown on the status page
         self.updating = False
         self.update_stage = ""
@@ -567,6 +568,7 @@ class Receiver:
             self.start()
             return True
         self.read_status()
+        self._tune_idle_check()
         self._pace()
         self._maybe_install()
         if self.video_on:
@@ -687,6 +689,13 @@ class Receiver:
         d = "".join(self.tune["digits"])
         return d[:3] + "." + d[3:]
 
+    def _tune_idle_check(self):
+        """Close the panel if nothing has been pressed for a while: while it is
+        open it takes every key, so it must never be possible to get stuck in it."""
+        if self.tune is not None and time.monotonic() - self.tune_t > 90:
+            log("tune panel closed (no keys for 90 s)")
+            self.close_tune()
+
     def open_tune(self):
         # the panel must show even if the OSD was hidden with BACK
         if self.osd_mode == "off":
@@ -696,6 +705,7 @@ class Receiver:
         f = "%06d" % int(round(p["freq"] * 1000))
         self.tune = {"digits": list(f), "pos": 0, "stage": "freq",
                      "bw": p["bw"] if p["bw"] in BW_CHOICES else 1700, "slot": 0}
+        self.tune_t = time.monotonic()
         self._tune_refresh()
         log("tune panel open")
 
@@ -713,6 +723,7 @@ class Receiver:
 
     def _tune_key(self, name):
         t = self.tune
+        self.tune_t = time.monotonic()
         up = name in ("up", "ch_up")
         down = name in ("down", "ch_down")
         ok = name in ("select", "info", "play")
@@ -893,12 +904,21 @@ class Receiver:
     def web_cmd(self, cmd, **q):
         def later(fn, *a):
             GLib.idle_add(lambda: (fn(*a), False)[1])
+        def close_then(fn, *a):
+            def run():
+                if self.tune is not None:
+                    self.close_tune()
+                fn(*a)
+                return False
+            GLib.idle_add(run)
         if cmd == "preset":
-            later(self.key, str(int(q["slot"])))
-        elif cmd in ("next", "prev", "osd", "back"):
-            later(self.key, {"next": "up", "prev": "down", "osd": "select", "back": "back"}[cmd])
+            close_then(self.select, int(q["slot"]))
+        elif cmd in ("next", "prev"):
+            close_then(self.key, "up" if cmd == "prev" else "down")
+        elif cmd in ("osd", "back"):
+            close_then(self.key, "select" if cmd == "osd" else "back")
         elif cmd == "tune":
-            later(self.tune_to, float(q["freq"]), int(q.get("bw", 1700)), q.get("name"))
+            close_then(self.tune_to, float(q["freq"]), int(q.get("bw", 1700)), q.get("name"))
         elif cmd == "save":
             slot = int(q["slot"])
             freq = float(q.get("freq") or self.cur()["freq"])
