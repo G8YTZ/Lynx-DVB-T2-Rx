@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.10
+* Technical Guide: new background section on forward error correction (from CDs
+  and hard disks to deep space), what DVB-T does, what DVB-T2 adds and why it is
+  better, and how to choose constellation, FEC, guard interval and bandwidth -
+  including what the guard interval actually buys, in microseconds and km.
+
 ## 1.9.9
 * Fix: the preset highlight moved and then jumped back. Between a preset change
   and the retune 0.4 s later, the page was redrawn from the details of the old

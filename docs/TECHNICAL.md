@@ -10,7 +10,106 @@ TV tuner was talked into receiving amateur-width channels.
   the Portsdown 4 transmitter (DVB-T2 option) and the Knucker/Ryde receivers.
 * **An appliance**: boots to a picture, driven from the TV remote.
 
-## 2. Why DVB-T2 only
+## 2. Background: FEC, DVB-T and DVB-T2
+Skip this if you already know it. It is here because the settings on the
+transmitter - FEC, constellation, guard interval - are the difference between a
+picture that survives a fluttering path and one that breaks up, and they are
+easier to choose if you know what they do.
+
+### 2.1 What forward error correction is
+Send the bits you want, plus some carefully chosen extra bits, and the receiver
+can work out what the original was even when some of it arrived wrong. No
+retransmission, no return path - hence *forward*. The cost is that some of your
+bit rate carries the check bits instead of the picture. "FEC 1/2" means half of
+what you transmit is your data; "3/4" means three quarters, so more picture and
+less protection.
+
+It is everywhere, usually invisibly:
+
+* **The compact disc** (1982) used cross-interleaved Reed-Solomon coding, with
+  the data spread across the disc so that a scratch destroys a little of many
+  blocks rather than all of a few - the interleaving mattered as much as the
+  coding. That is why a scratched CD still plays.
+* **Hard disks and SSDs** correct errors on every read; flash memory could not
+  work at all without strong LDPC coding.
+* **QR codes** use Reed-Solomon, which is why one still scans with a coffee
+  ring across it.
+* **Deep space**: Voyager used convolutional coding with Viterbi decoding, then
+  Reed-Solomon on top - the same combination broadcast television later used.
+* **Mobile phones, Wi-Fi, satellite links, DAB, DVB** - all of it.
+
+Two ideas recur, and both are in DVB-T2:
+* **Interleaving**: spread the data out in time and frequency, so a burst of
+  interference damages a little of many blocks instead of destroying a few.
+* **Soft decision**: the demodulator reports not just "this looks like a 1" but
+  how confident it is, and the decoder uses that confidence. It is worth
+  several dB, and it is why modern codes get so close to the theoretical limit.
+
+### 2.2 What DVB-T does
+DVB-T (1997) carries the picture on thousands of low-rate carriers at once
+(OFDM) instead of one fast one. Each carrier is slow enough that a reflection
+arriving late overlaps only slightly, and a **guard interval** - a copy of the
+end of each symbol placed in front of it - absorbs what remains. Reflections
+stop being a problem to be equalised away and become extra signal.
+
+Its error correction is a 1990s pair: convolutional coding with Viterbi
+decoding inside, Reed-Solomon outside to clean up what is left. Good, and by
+the standards of the time excellent, but a few dB short of what is possible.
+
+### 2.3 What DVB-T2 adds
+DVB-T2 (2009) keeps OFDM and replaces almost everything else. It carries about
+50% more data in the same channel at the same robustness - or the same data
+with several dB more margin, which is what matters to us.
+
+* **LDPC + BCH coding.** Low-density parity-check codes with soft-decision
+  decoding come within about 1 dB of the Shannon limit, where DVB-T's coding is
+  perhaps 3 dB away. This is the single biggest gain.
+* **Rotated constellations.** The constellation is rotated and the I and Q
+  components are transmitted separately, at different times and on different
+  carriers. If a fade destroys one, the other still carries enough to recover
+  the symbol - worth a lot on a fading path, and free.
+* **Time interleaving across a whole frame.** DVB-T interleaves across a
+  symbol; DVB-T2 spreads a FEC block across an entire T2 frame, up to 250 ms
+  here. A flutter that would wipe out a run of symbols instead costs a few bits
+  from many blocks, which the LDPC repairs. This is why waving the transmit
+  antenna about does not break the picture.
+* **More pilot patterns**, chosen to suit the guard interval, so fewer carriers
+  are spent on reference signals.
+* **A native 1.7 MHz mode**, which is what makes narrowband amateur DATV
+  possible with broadcast silicon (DVB-T's narrowest standard channel is 5 MHz).
+
+The cost is decoding effort - LDPC decoding is far more work than Viterbi -
+which is why DVB-T2 arrived when silicon could afford it, and why a £20 TV HAT
+doing it at all is remarkable.
+
+### 2.4 Choosing the settings
+| Setting | What it trades |
+|---|---|
+| **Constellation** QPSK / 16QAM / 64QAM | Bits per symbol against robustness. QPSK carries 2 bits and needs about 2 dB C/N at FEC 1/2; 64QAM carries 3 times as much and needs about 11 dB more. On a weak path, QPSK. |
+| **FEC** 1/2 ... 5/6 | Protection against bit rate. 1/2 is the most robust, 5/6 the fastest. Each step up costs roughly 1-2 dB of margin. |
+| **Guard interval** 1/32 ... 1/4 | Echo tolerance against bit rate. Longer guard = longer echoes tolerated, fewer bits. |
+| **Bandwidth** | Bit rate against spectrum - and against noise: doubling the bandwidth doubles the noise the receiver takes in, so it costs 3 dB. |
+
+**Guard interval, in numbers.** The guard is a fraction of the symbol, and a
+2K symbol at 1.7 MHz is about 1.1 ms, so:
+
+| Guard | Length at 1.7 MHz | Echo tolerated | Cost |
+|---|---|---|---|
+| 1/32 | ~35 us | ~10 km path difference | - |
+| 1/16 | ~69 us | ~21 km | 3% of the bit rate |
+| 1/8 | ~139 us | ~42 km | 9% |
+| 1/4 | ~278 us | ~83 km | 20% |
+
+**1/8 is more robust than 1/16** - it tolerates twice the echo delay - but it
+only helps against *echoes*. It does nothing for a weak signal; if you are
+short of margin rather than fighting reflections, spend the bits on a lower FEC
+instead. At these bandwidths even 1/32 copes with a 10 km echo, so 1/16 is a
+sensible default and 1/8 is worth it in bad multipath.
+
+The OSD's **margin** figure (6.7) is the practical guide: it shows how many dB
+of C/N you have in hand for the mode actually being transmitted.
+
+## 3. Why DVB-T2 only
 ### What DVB-T2 brings
 * **LDPC + BCH coding** - several dB more robust than DVB-T's convolutional
   and Reed-Solomon coding at the same bit rate, or more bit rate at the same
@@ -28,7 +127,7 @@ TV tuner was talked into receiving amateur-width channels.
 ### Why not narrowband DVB-T as well
 The Portsdown already transmits DVB-T at 1-4 MHz by slowing a standard signal
 down, so we tried hard to make the TV HAT receive it. With the patched driver
-(section 4) we could override every bandwidth-dependent setting in the Sony
+(section 5) we could override every bandwidth-dependent setting in the Sony
 demodulator's DVB-T path: the sample-clock ratio, the bandwidth code, the tuner
 IF filter, the timing-offset register (0x7d), symbol sync (0x71) and both notch
 filters (0x72, 0x6b).
@@ -42,7 +141,7 @@ filters (0x72, 0x6b).
 Narrowband DVB-T on the CXD2880 is a dead end. DVB-T2, whose narrow processing
 Sony did build (for 1.7 MHz), stretches easily - so the receiver is DVB-T2 only.
 
-## 3. Why 1.35, 1.7 and 2.0 MHz
+## 4. Why 1.35, 1.7 and 2.0 MHz
 | Setting | Sample rate | Occupied | TS capacity* | TV HAT | Knucker |
 |---|---|---|---|---|---|
 | **1350 kHz** | 1.542857 MS/s | 1.28 MHz | 0.90 Mb/s | patched driver | no (Ryde) |
@@ -72,8 +171,8 @@ TV HAT cannot.
 is shared with the satellite service, which has priority. Check the current
 RSGB band plan and coordinate before operating.
 
-## 4. The driver hack
-### 4.1 Background
+## 5. The driver hack
+### 5.1 Background
 The Linux driver for the TV HAT's Sony CXD2880 accepts only broadcast
 bandwidths (1.7, 5, 6, 7, 8 MHz) and frequencies from 174 MHz. Reading the
 driver source showed that, for every mode Sony supports, the demodulator's
@@ -82,7 +181,7 @@ against all five of Sony's tables, bit for bit. The other per-bandwidth
 settings are a small bandwidth code and a tuner IF-filter setting. So in
 principle a non-standard bandwidth is just a different number in one register.
 
-### 4.2 The patch
+### 5.2 The patch
 `driver/cxd2880-nb` is the kernel driver with two changes:
 1. **Lower frequency limit 174 -> 40 MHz.** The front end tunes well below its
    specification: it hears 146.5 MHz, and in principle down to 40 MHz.
@@ -106,7 +205,7 @@ The receiver tunes the driver's standard 1.7 MHz DVB-T2 mode and, for 1350 and
 | 2000 | 2285714 | 0 (5/6 MHz filter) | 84.00 |
 | 1350 | 1542857 | 3 (1.7 MHz filter) | 124.44 |
 
-### 4.3 The 1.31 MHz wall
+### 5.3 The 1.31 MHz wall
 Locking was tested at 2.0, 1.75, 1.7, 1.5 and 1.35 MHz - all fine - but
 **1.28 MHz and below would not lock**, however strong the signal. The cut-off
 is sharp: a register value of 124 (1.35 MHz) locks, 131 (1.28 MHz) doesn't.
@@ -115,17 +214,17 @@ the largest value is 127.99, which means a sample rate of at least 1.5 MS/s:
 a **1.3125 MHz** channel. The experimental parameters above were added to hunt
 for a hidden extra bit; none has got past the limit so far.
 
-### 4.4 2m
+### 5.4 2m
 With the lower limit at 40 MHz the TV HAT hears signals on 146.5 MHz, but the
 1.31 MHz wall means it can't use the 1 MHz 2m slot. T2 lock on 2m at 1.35 MHz
 or wider has not been tried; for the 1 MHz slot the Knucker is the receiver.
 
-### 4.5 DKMS
+### 5.5 DKMS
 The patched module is packaged for DKMS (`driver/install_driver.sh`), so a
 kernel update rebuilds it automatically instead of silently reverting to the
 stock driver.
 
-## 5. Receiver software
+## 6. Receiver software
     TV HAT (CXD2880)
        |  /dev/dvb/adapter0
     t2rx (C) --- tune, lock, hold back to the first keyframe, TS to a pipe, status
@@ -139,7 +238,7 @@ stock driver.
        |- cec.py: cec-ctl - name, active source, remote keys
        |- control socket /run/t2rx.sock <- t2rx-ctl
 
-### 5.1 t2rx
+### 6.1 t2rx
 A small C program using the Linux DVB API directly. It sets up DVB-T2 at the
 preset frequency, passes every PID to the DVR device and copies the transport
 stream to its output (stdout; `-u` sends UDP instead). Until the first H.264
@@ -154,7 +253,7 @@ cleanly. Twice a second it writes the status file:
 `mod`, `fec`, `gi` and `fft` are what the transmitter is signalling (read back
 from the demodulator), so the OSD shows the real mode on air.
 
-### 5.2 The player, and four lessons
+### 6.2 The player, and four lessons
 * **Delay versus clean sound.** Fed through a pipe, the player queued everything
   that arrived while the decoder waited for the first keyframe, then played from
   the start of that queue: the keyframe wait became permanent delay (8.4 s
@@ -183,7 +282,7 @@ from the demodulator), so the OSD shows the real mode on air.
 receiver drops the OSD and pixel-shape stages and plays the plain chain, and
 logs why. A display problem never costs the picture.
 
-### 5.2a Transmitter timing, and the start cushion
+### 6.2a Transmitter timing, and the start cushion
 A receiver that plays in real time depends on the transmitter's timestamps
 keeping real time too (MPEG allows +/-30 ppm for the programme clock). Measured
 from the air with `tools/ptsdrift.py` against the Pi's network-set clock:
@@ -205,14 +304,14 @@ data in bursts about 250 ms apart, and a Portsdown multiplexes its audio up to
 `start_buffer_ms` (1.5 s) is stored; if a fast transmitter builds the store
 past `max_buffer_ms` (8 s) the player restarts.
 
-### 5.3 Sound on a single core
+### 6.3 Sound on a single core
 The Pi Zero W has one CPU core, so anything that briefly takes it (an OSD
 redraw, a background job) can leave the sound card empty for a moment - a
 break-up you mostly hear on speech. Three defences:
 * a **sound buffer** (`audio_buffer_ms`, 200 ms; raise it if needed - the
   picture is delayed by the same amount to keep lip-sync). Measured on the Zero,
   the sound card never ran low: the gaps heard in 1.3/1.4 came from resyncs,
-  not starvation (5.2);
+  not starvation (6.2);
 * the OSD is redrawn at most every 2 s, on a thread that lowers its own
   priority (nice 15), while the service runs at nice -5;
 * **headroom**: `audio_volume` 0.8 before conversion to 16-bit, because AAC
@@ -220,7 +319,7 @@ break-up you mostly hear on speech. Three defences:
 Measured: the Zero ran at 46 C with no throttling (`vcgencmd get_throttled` =
 0x0), so heat was not the cause; a heatsink is still sensible under the HAT.
 
-### 5.3a Display
+### 6.3a Display
 * **Status page**: drawn with Pillow straight onto the framebuffer (16- or
   32-bit), with only the live card redrawn each second (cheap on a Zero). The
   text console is unbound from the framebuffer while the receiver owns it.
@@ -251,7 +350,7 @@ Measured: the Zero ran at 46 C with no throttling (`vcgencmd get_throttled` =
   mode shows the picture slightly narrow; on a monitor that reports its size
   properly (most TVs) there is no difference.
 
-### 5.4 HDMI-CEC
+### 6.4 HDMI-CEC
 `cec-ctl` registers the receiver as a Playback device with an OSD name (up to
 14 characters, default *Lynx DVB-T2 Rx*) so the TV lists it by name, and sends
 Image View On + Active Source at start-up (One Touch Play). A monitor process
@@ -259,7 +358,7 @@ answers the TV's menu-status, power-status and active-source requests (without
 these many TVs won't pass the arrow keys) and turns remote key presses into
 actions, ignoring auto-repeat.
 
-### 5.5 Files and control
+### 6.5 Files and control
 | Path | What |
 |---|---|
 | `/opt/t2rx/` | program |
@@ -275,7 +374,7 @@ CEC monitor and driver overrides need it) and restarts on failure. The
 installer masks PipeWire/WirePlumber: on images that have them they grab the
 HDMI sound device ("Device or resource busy").
 
-### 5.5a Web control
+### 6.5a Web control
 `web.py` is Python's own `http.server` on a low-priority daemon thread: no
 framework, no dependencies, and idle (a socket waiting) until someone connects,
 so it costs nothing while receiving. Every request is answered from the
@@ -287,7 +386,7 @@ that polls `/status` every 2 s.
 Preset edits rewrite `/etc/t2rx/presets.conf` through a temporary file and
 `os.replace`, so an interrupted write can't leave it empty or half-written.
 
-### 5.6 Updates
+### 6.6 Updates
 `update.py` asks the GitHub releases API for the latest release and the tag
 list (a pushed tag is enough; no release need be published), takes the newest (a minute after
 boot, then daily, in a background thread so nothing stalls if the network is
@@ -297,12 +396,12 @@ transmission - by `git fetch`, `git checkout <tag>` and `install.sh --no-boot`
 in the checkout it was installed from, then exits so systemd restarts it into
 the new version. `notify` waits for OK on the remote; `off` disables it.
 
-### 5.7 Margin
+### 6.7 Margin
 Margin = measured C/N minus the C/N the signalled mode needs, from typical
 DVB-T2 figures (e.g. QPSK 1/2 about 2 dB, 16QAM 1/2 about 7 dB, 64QAM 2/3
 about 14 dB). Treat it as a guide: green 3 dB or more, amber 0-3 dB, red below.
 
-## 6. Testing and compatibility
+## 7. Testing and compatibility
 * **Receiver:** Raspberry Pi Zero W v1.1, Raspberry Pi OS Lite (32-bit). This
   is the only board tested; nothing has been tried on other Pis yet.
 * **Transmitter:** Portsdown 4 with the DVB-T2 option (`dvb_t2_stack`, built on
@@ -314,14 +413,14 @@ about 14 dB). Treat it as a guide: green 3 dB or more, amber 0-3 dB, red below.
   but not 1.35. The Portsdown's own Knucker receive locks at 1.0 and 2.0 MHz
   but not 1.7 - under investigation.
 
-## 7. Limitations and next steps
+## 8. Limitations and next steps
 * Pi Zero v1: H.264 only (no H.265 decoder); about 2 s from lock plus the wait
   for the transmitter's next keyframe.
 * No audio level meter (PPM) or tuning eye yet - planned for a Pi Zero 2 W
   version.
 * Next transmitter: the BATC Muntjac, for a low-cost DVB-T2 transmit path.
 
-## 8. Credits
+## 9. Credits
 * DVB-T2 transmit: GNU Radio gr-dtv (Ron Economos W6RZ and contributors), and
   the Portsdown 4 (Dave G8GKQ, Charles G4GUO).
 * The project started from a question by Gareth G4XAT about the Pi TV HAT.

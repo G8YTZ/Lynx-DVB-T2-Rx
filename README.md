@@ -87,7 +87,8 @@ persuaded to receive the non-standard ones.
 
 Full instructions, including tuning from the remote and the webhook URLs:
 **[Install Guide](docs/INSTALL.md)**.
-How it works: **[Technical Guide](docs/TECHNICAL.md)**.
+How it works, and a plain-English background on error correction and why
+DVB-T2 beats DVB-T: **[Technical Guide](docs/TECHNICAL.md)**.
 
 ## Status
 Version 1.8. Tested on a Raspberry Pi Zero W v1.1 with Raspberry Pi OS Lite

@@ -99,7 +99,7 @@ From SSH:
     tail -f /var/log/t2rx.log  # what it's doing
 
 > **1700 and 1614 are the same channel.** Standard "1.7 MHz" DVB-T2 is often
-> quoted as 1614 kHz (see the Technical Guide, section 3). On this receiver and
+> quoted as 1614 kHz (see the Technical Guide, section 4). On this receiver and
 > on the Portsdown DVB-T2 option, choose **1700**; on equipment that labels it
 > 1614 (such as the Ryde's notes), 1614 is the same signal.
 

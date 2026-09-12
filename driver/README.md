@@ -10,6 +10,6 @@ kHz DVB-T2; 1700 kHz works without it.
     ls /sys/module/cxd2880/parameters/     # nb_fs_hz etc. = patched driver loaded
 
 About 15 minutes to build on a Pi Zero. Background and parameter list:
-[Technical Guide, section 4](../docs/TECHNICAL.md#4-the-driver-hack).
+[Technical Guide, section 5](../docs/TECHNICAL.md#5-the-driver-hack).
 
 Licence: GPL-2.0 (derived from the Linux kernel driver by Sony).
