@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.9
+* Fix: the preset highlight moved and then jumped back. Between a preset change
+  and the retune 0.4 s later, the page was redrawn from the details of the old
+  channel; the selection is now always drawn from the current one.
+
 ## 1.9.8
 * Fix: automatic updates still failed with git's "dubious ownership" - 1.9.2
   wrote the exception into root's global config, which git didn't pick up. Every

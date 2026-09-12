@@ -41,7 +41,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.8"
+VERSION = "t2rx 1.9.9"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -610,6 +610,11 @@ class Receiver:
         if not msg and self.st.get("state") == "LOCK" and not self.video_on:
             msg = ("LOCKED - waiting for picture", osd.GREEN)
         info = dict(self.info)
+        # self.info is only refreshed when the tuner starts, so between a preset
+        # change and the retune it still describes the old channel - which made
+        # the highlight jump back. The selection always comes from self.preset.
+        cur = self.cur()
+        info.update(preset=self.preset, name=cur["name"], freq=cur["freq"], bw=cur["bw"])
         if self.tune is not None:
             info.pop("update", None)
         if self.updating:
