@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.8
+* Fix: automatic updates still failed with git's "dubious ownership" - 1.9.2
+  wrote the exception into root's global config, which git didn't pick up. Every
+  git command now carries the exception itself (`git -c safe.directory=...`),
+  which cannot be missed.
+* Updates are checked every 4 hours instead of once a day.
+
 ## 1.9.7
 * **Remote lag fixed properly.** Every keypress redrew the whole 1920x1080
   status page in Python and wrote all 4 MB of it to the framebuffer - on a Pi

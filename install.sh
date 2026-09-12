@@ -39,6 +39,7 @@ done
 
 # the receiver runs as root but the checkout belongs to the user: let git use it
 sudo git config --global --add safe.directory "$(pwd)" 2>/dev/null || true
+git config --global --add safe.directory "$(pwd)" 2>/dev/null || true
 
 echo "== Service"
 sudo systemctl disable --now t2box 2>/dev/null || true      # early test version

@@ -41,7 +41,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.7"
+VERSION = "t2rx 1.9.8"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -1045,7 +1045,7 @@ class Receiver:
         self.start()
         GLib.timeout_add(500, self.tick)
         GLib.timeout_add_seconds(60, self.check_updates)          # shortly after boot
-        GLib.timeout_add_seconds(24 * 3600, self.check_updates)   # and daily
+        GLib.timeout_add_seconds(4 * 3600, self.check_updates)    # and every 4 hours
         self.loop.run()
 
     def quit(self):

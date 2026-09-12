@@ -25,17 +25,20 @@ def _ver(s):
 
 def _run(args, cwd, timeout=300):
     env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    if args and args[0] == "git":
+        # The receiver runs as root while the checkout belongs to the user, so git
+        # refuses it ("dubious ownership") unless the path is marked safe. -c is
+        # certain; writing it to root's global config depends on $HOME being root's.
+        args = ["git", "-c", "safe.directory=%s" % cwd] + list(args[1:])
     return subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout, env=env)
 
 
 def _allow_dir(d, log):
-    """The receiver runs as root but the checkout belongs to pi, which modern git
-    refuses to touch ("dubious ownership") unless the path is marked safe."""
+    """Also record it in root's git config, so install.sh's own git calls work."""
     try:
         r = _run(["git", "config", "--global", "--get-all", "safe.directory"], d, timeout=20)
         if d not in (r.stdout or "").split():
             _run(["git", "config", "--global", "--add", "safe.directory", d], d, timeout=20)
-            log("update: marked %s as safe for git" % d)
     except (OSError, subprocess.TimeoutExpired) as e:
         log("update: %s" % e)
 
