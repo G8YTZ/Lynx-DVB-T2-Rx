@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.7
+* **Remote lag fixed properly.** Every keypress redrew the whole 1920x1080
+  status page in Python and wrote all 4 MB of it to the framebuffer - on a Pi
+  Zero that is most of a second, so the remote felt laggy and the tune panel
+  seemed unselectable. Stepping through presets now redraws only the preset
+  list, and editing in the tune panel only the panel: about a fifth of the
+  pixels and a fraction of the drawing.
+
 ## 1.9.6
 * **Fix: it was possible to get stuck in the tune panel.** While the panel is
   open it takes every key - and because the panel could be invisible (1.9.5),

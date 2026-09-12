@@ -258,6 +258,43 @@ def render_tune(width, t, presets=()):
 
 
 # -------------------------------------------------------------- idle page
+def presets_box(W, H):
+    """Screen area of the preset list, for redrawing just that."""
+    s = H / 1080.0
+    return (int(1200 * s) - 4, int(150 * s) - 4, W, int(960 * s))
+
+
+def _presets_panel(d, W, H, presets, cur, ox=0, oy=0):
+    s = H / 1080.0
+    px, py, pw = 1200 * s + ox, 150 * s + oy, W - 1260 * s
+    d.text((px, py), "PRESETS", font=font(24 * s, bold=True), fill=MUTED)
+    py += 50 * s
+    for key, p in list(presets) + [("tune", {"name": "Tune...", "freq": None, "bw": ""})]:
+        h = 52 * s
+        on = (str(key) == cur)
+        d.rounded_rectangle([px, py, px + pw, py + h], radius=12 * s,
+                            fill=(BG_HI if on else BG_PANEL), outline=(ACCENT if on else BG_HI), width=2)
+        d.text((px + 20 * s, py + h / 2), "" if key == "tune" else str(key),
+               font=font(26 * s, bold=True), fill=(ACCENT if on else FAINT), anchor="lm")
+        d.text((px + 60 * s, py + h / 2), p.get("name", ""), font=font(24 * s, bold=on),
+               fill=(TXT if on else TXT2), anchor="lm")
+        if p.get("freq") is not None:
+            d.text((px + pw - 20 * s, py + h / 2), "%.3f  %s" % (p["freq"], p["bw"]),
+                   font=font(20 * s), fill=MUTED, anchor="rm")
+        py += h + 10 * s
+        if py - oy > 900 * s:
+            break
+
+
+def render_presets(W, H, presets, cur):
+    """Just the preset list, as a small image, with the box to blit it into."""
+    box = presets_box(W, H)
+    img = Image.new("RGB", (box[2] - box[0], box[3] - box[1]), BG_BASE)
+    d = ImageDraw.Draw(img)
+    _presets_panel(d, W, H, presets, str(cur), ox=-box[0], oy=-box[1])
+    return img, box
+
+
 def idle_card_box(W, H):
     """Screen area of the live status card (for partial updates)."""
     s = H / 1080.0
@@ -325,27 +362,7 @@ def render_idle(W, H, st, info, presets, message=None, version=""):
         d.text((cx + 30 * s, cy + ch + 24 * s + h / 2), upd, font=font(26 * s, bold=True),
                fill=INFO, anchor="lm")
 
-    # presets
-    px, py, pw = 1200 * s, 150 * s, W - 1260 * s
-    d.text((px, py), "PRESETS", font=font(24 * s, bold=True), fill=MUTED)
-    py += 50 * s
-    cur = str(info.get("preset", ""))
-    for key, p in list(presets) + [("tune", {"name": "Tune...", "freq": None, "bw": ""})]:
-        h = 52 * s
-        on = (str(key) == cur)
-        d.rounded_rectangle([px, py, px + pw, py + h], radius=12 * s,
-                            fill=(BG_HI if on else BG_PANEL), outline=(ACCENT if on else BG_HI), width=2)
-        d.text((px + 20 * s, py + h / 2), "" if key == "tune" else str(key),
-               font=font(26 * s, bold=True), fill=(ACCENT if on else FAINT), anchor="lm")
-        d.text((px + 60 * s, py + h / 2), p.get("name", ""), font=font(24 * s, bold=on),
-               fill=(TXT if on else TXT2), anchor="lm")
-        if p.get("freq") is not None:
-            d.text((px + pw - 20 * s, py + h / 2), "%.3f  %s" % (p["freq"], p["bw"]),
-                   font=font(20 * s), fill=MUTED, anchor="rm")
-        py += h + 10 * s
-        if py > 900 * s:
-            break
-
+    _presets_panel(d, W, H, presets, str(info.get("preset", "")))
     # footer
     d.rectangle([0, H - 70 * s, W, H], fill=BG_PANEL)
     d.text((60 * s, H - 35 * s),

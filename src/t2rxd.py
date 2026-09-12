@@ -19,6 +19,7 @@ import sys
 import threading
 import time
 
+from PIL import Image  # noqa: E402
 import gi
 gi.require_version("Gst", "1.0")
 gi.require_version("GdkPixbuf", "2.0")
@@ -40,7 +41,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.6"
+VERSION = "t2rx 1.9.7"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -435,12 +436,14 @@ class Receiver:
             self.pipe.get_bus().remove_signal_watch()
             self.pipe = None
             self.osd_el = None
+        had_video = self.video_on
         self.video_on = False
         self.last_osd = None
         if self.plane is not None:
             self.plane.hide()
             self.plane.hide_video()      # else its last frame stays on screen, hiding the status page
-        self._idle_layout = None
+        if had_video:
+            self._idle_layout = None     # the whole page must be drawn again over the old picture
 
     def stop(self):
         self.gen += 1
@@ -579,10 +582,29 @@ class Receiver:
             self.draw_idle()
         return True
 
-    def draw_idle(self, force=False):
+    def _tune_box(self):
+        h = self.fb.h / 1080.0
+        panel = osd.render_tune(self.fb.w, self.tune, self.presets)
+        return panel, (int(self.fb.w - panel.width - 60 * h), int(self.fb.h - panel.height - 110 * h))
+
+    def draw_idle(self, force=False, part=None):
+        """part="presets" or "tune" redraws only that area: a full 1080p page in
+        Python costs a Pi Zero a good fraction of a second, and redrawing all of
+        it for every keypress made the remote feel laggy."""
         now = time.monotonic()
-        if not force and now - self.last_idle < 1.0:
+        if not force and part is None and now - self.last_idle < 1.0:
             return
+        if part and getattr(self, "_idle_layout", None) is not None and not self.updating:
+            if part == "presets":
+                img, box = osd.render_presets(self.fb.w, self.fb.h, self.presets, self.preset)
+                self.fb.show(img, box[:2])
+                return
+            if part == "tune" and self.tune is not None:
+                panel, at = self._tune_box()
+                bg = Image.new("RGB", panel.size, osd.BG_BASE)
+                bg.paste(panel, (0, 0), panel)
+                self.fb.show(bg, at)
+                return
         self.last_idle = now
         msg = self.message
         if not msg and self.st.get("state") == "LOCK" and not self.video_on:
@@ -600,10 +622,13 @@ class Receiver:
             info["update"] = "Update %s available%s" % (
                 self.update_tag, "" if self.cfg.get("updates", "auto") == "auto" else " - press OK to install")
         img = osd.render_idle(self.fb.w, self.fb.h, self.st, info, self.presets, msg, VERSION)
+        if self.tune is not None:
+            panel, at = self._tune_box()
+            img.paste(panel, at, panel)
         # Only the status card changes second to second: redraw just that
         # unless the layout (preset, message, presets list) changed.
         layout = (self.preset, msg, str(self.presets), self.info.get("warning"),
-                  self.fb.w, self.fb.h, self.update_stage, self.updating)
+                  self.fb.w, self.fb.h, self.update_stage, self.updating, self.tune is not None)
         if force or layout != getattr(self, "_idle_layout", None):
             self._idle_layout = layout
             self.fb.show(img)
@@ -706,7 +731,7 @@ class Receiver:
         self.tune = {"digits": list(f), "pos": 0, "stage": "freq",
                      "bw": p["bw"] if p["bw"] in BW_CHOICES else 1700, "slot": 0}
         self.tune_t = time.monotonic()
-        self._tune_refresh()
+        self._tune_refresh(part=None)          # full page: the panel appears
         log("tune panel open")
 
     def close_tune(self):
@@ -714,12 +739,12 @@ class Receiver:
         self.osd_until = time.monotonic() + float(self.cfg.get("osd_timeout", "15"))
         self._redraw()
 
-    def _tune_refresh(self):
+    def _tune_refresh(self, part="tune"):
         t = self.tune
         t["digits"] = list("".join(t["digits"]))
         t["shown"] = self._tune_shown()
         t["freq"] = float("".join(t["digits"])) / 1000.0
-        self._redraw()
+        self._redraw(part)
 
     def _tune_key(self, name):
         t = self.tune
@@ -825,13 +850,13 @@ class Receiver:
             self.start()
         return True
 
-    def _redraw(self):
+    def _redraw(self, part=None):
         """Draw the tune panel wherever it will be seen: over the picture if there
         is one, and on the status page as well, so it cannot end up hidden."""
         self.last_osd = None
         if self.video_on:
             self.update_osd(force=True)
-        self.draw_idle(force=True)
+        self.draw_idle(force=(part is None), part=part)
 
     # ------------------------------------------------------------ control
     def key(self, name):
@@ -892,7 +917,7 @@ class Receiver:
         # Retune shortly, not instantly: stepping through the list with the arrows
         # would otherwise stop and restart the tuner and player for every press.
         self.stop()
-        self.draw_idle(force=True)
+        self.draw_idle(part="presets")         # only the list changes: cheap on a Zero
         self.restart_at = time.monotonic() + 0.4
 
     # ------------------------------------------------------------ web
