@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.2
+* **Remote lag fixed.** Every question the TV asked (power, menu, active source)
+  started a new `cec-ctl` process to answer it; on a single-core Pi a flurry of
+  those delayed keypresses by seconds. Keys are now handled before anything
+  else, replies are rate-limited to one of each kind every 5 s and never run
+  more than one at a time.
+* Stepping through presets with the arrows no longer stops and restarts the
+  tuner and player on every press - it waits 0.4 s for you to settle.
+* OK also responds to the Play key, which some remotes send instead.
+
 ## 1.9.1
 * Fix: automatic updates failed with git's "dubious ownership" error - the
   receiver runs as root while the checkout belongs to the user. The updater now

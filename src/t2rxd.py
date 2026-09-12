@@ -40,7 +40,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.1"
+VERSION = "t2rx 1.9.2"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -815,7 +815,7 @@ class Receiver:
             n = int(name)
             if n in keys and n != 0:
                 self.select(n)
-        elif name in ("select", "info"):
+        elif name in ("select", "info", "play"):
             if self.update_tag and not self.video_on and not self.updating:
                 self.install_update()
             else:
@@ -847,7 +847,11 @@ class Receiver:
         self.osd_until = time.monotonic() + float(self.cfg.get("osd_timeout", "15"))
         if self.osd_mode == "off":
             self.osd_mode = self.cfg.get("osd", "auto")
-        self.start()
+        # Retune shortly, not instantly: stepping through the list with the arrows
+        # would otherwise stop and restart the tuner and player for every press.
+        self.stop()
+        self.draw_idle(force=True)
+        self.restart_at = time.monotonic() + 0.4
 
     # ------------------------------------------------------------ web
     def web_status(self):

@@ -19,11 +19,14 @@ for _n in range(10):
 
 
 class Cec:
-    def __init__(self, on_key, name="T2 Receiver", dev="/dev/cec0", log=print):
+    def __init__(self, on_key, name="T2 Receiver", dev="/dev/cec0", log=print, on_key_at=None):
         self.on_key, self.name, self.dev, self.log = on_key, name[:14], dev, log
+        self.on_key_at = on_key_at
         self.phys = None
         self.proc = None
         self._last = (None, 0.0)
+        self._replied = {}          # rate limit: one reply of each kind per few seconds
+        self._busy = threading.Semaphore(1)
 
     def _ctl(self, *args, timeout=8):
         try:
@@ -50,8 +53,21 @@ class Cec:
         self._ctl("--to", "0", "--image-view-on")
         self._ctl("--to", "15", "--active-source", "phys-addr=%s" % self.phys)
 
-    def _reply(self, to, *args):
-        threading.Thread(target=self._ctl, args=("--to", str(to)) + args, daemon=True).start()
+    def _reply(self, kind, to, *args):
+        """Answer the TV, but sparingly: each cec-ctl run is a new process, and on
+        a single-core Pi a flurry of them delays the remote keys by seconds."""
+        now = time.monotonic()
+        if now - self._replied.get(kind, 0) < 5:
+            return
+        self._replied[kind] = now
+        if not self._busy.acquire(blocking=False):
+            return                                   # one at a time
+        def work():
+            try:
+                self._ctl("--to", str(to), *args, timeout=5)
+            finally:
+                self._busy.release()
+        threading.Thread(target=work, daemon=True).start()
 
     def _monitor(self):
         while True:
@@ -64,22 +80,28 @@ class Cec:
                 return
             pending_key = False
             for line in self.proc.stdout:
-                src = re.search(r"\((\d+) to (\d+)\)", line)
-                if "Received from" in line and src:
-                    frm = int(src.group(1))
-                    pending_key = "USER_CONTROL_PRESSED" in line
-                    if "GIVE_DEVICE_MENU_STATUS" in line or "MENU_REQUEST" in line:
-                        self._reply(frm, "--menu-status", "menu-state=activated")
-                    elif "GIVE_DEVICE_POWER_STATUS" in line:
-                        self._reply(frm, "--report-power-status", "pwr-state=on")
-                    elif ("REQUEST_ACTIVE_SOURCE" in line or "SET_STREAM_PATH" in line) and self.phys:
-                        self._reply(15, "--active-source", "phys-addr=%s" % self.phys)
-                    continue
+                # keys first: nothing else may delay them
                 if pending_key and "ui-cmd" in line:
                     pending_key = False
                     m = re.search(r"\(0x([0-9a-f]+)\)", line)
                     if m:
                         self._key(int(m.group(1), 16))
+                    continue
+                if "Received from" not in line:
+                    continue
+                pending_key = "USER_CONTROL_PRESSED" in line
+                if pending_key:
+                    continue
+                src = re.search(r"\((\d+) to (\d+)\)", line)
+                if not src:
+                    continue
+                frm = int(src.group(1))
+                if "GIVE_DEVICE_MENU_STATUS" in line or "MENU_REQUEST" in line:
+                    self._reply("menu", frm, "--menu-status", "menu-state=activated")
+                elif "GIVE_DEVICE_POWER_STATUS" in line:
+                    self._reply("power", frm, "--report-power-status", "pwr-state=on")
+                elif ("REQUEST_ACTIVE_SOURCE" in line or "SET_STREAM_PATH" in line) and self.phys:
+                    self._reply("source", 15, "--active-source", "phys-addr=%s" % self.phys)
             time.sleep(2)            # monitor died: restart it
 
     def _key(self, code):
@@ -90,6 +112,8 @@ class Cec:
         last, t = self._last
         if name == last and now - t < 0.35:      # auto-repeat while held
             return
+        if self.on_key_at is not None:
+            self.on_key_at(now)
         self._last = (name, now)
         self.on_key(name)
 
