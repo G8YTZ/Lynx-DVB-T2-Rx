@@ -29,8 +29,9 @@ on digital ATV for very little.
   guard interval, FFT), C/N with margin, signal level, TS rate, video and audio.
   Full panel for 15 s on lock or preset change, then a small callsign badge.
 * **Your TV's remote over HDMI-CEC** - up/down the preset list, 0-9 direct,
-  OK for the OSD, and **0 to tune**: type a frequency on the keypad, pick the
-  bandwidth, then store it in a preset. No keyboard, no SSH.
+  OK for the OSD, and **Tune...** after the last preset: set the frequency and
+  bandwidth with the arrows alone (no keypad needed - most TV remotes don't
+  send one over CEC) and store it in a preset. No keyboard, no SSH.
 * **HDMI identification** - appears on the TV as *Lynx DVB-T2 Rx* and switches
   the TV to itself at start-up.
 * **Nine presets**, each with its own frequency and bandwidth, editable from

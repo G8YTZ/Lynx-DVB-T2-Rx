@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9
+* **Tuning works with arrows and OK alone** - many TV and AV remotes (a Yamaha
+  here) have no keypad and never pass the colour keys over CEC. **Tune...** now
+  sits after the last preset, so scrolling down reaches it. Then: change each
+  digit of the frequency with Up/Down and step through with OK, choose the
+  bandwidth with Up/Down, and pick the preset to store it in (or "no"). A
+  keypad still works where there is one, and 0 / Red / Menu still jump straight
+  to the panel.
+
 ## 1.8.4
 * Tuning is now on the **0** key: presets are 1-9 and every remote has a 0,
   whereas many TVs and AV receivers keep the colour keys for themselves and

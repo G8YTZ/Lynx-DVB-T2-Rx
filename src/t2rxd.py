@@ -40,7 +40,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.8.4"
+VERSION = "t2rx 1.9"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -657,54 +657,96 @@ class Receiver:
         self.osd_el.set_property("alpha", 1.0)
 
     # ------------------------------------------------------------ tuning
+    # Works with arrows and OK alone (many TV and AV remotes have no keypad).
+    # Three stages: frequency (a digit at a time), bandwidth, then where to store.
     def _tune_shown(self):
-        d = self.tune["digits"]
-        if not d:
-            return "---.---"
-        return d[:3].ljust(3, "-") + "." + d[3:].ljust(3, "-")
+        d = "".join(self.tune["digits"])
+        return d[:3] + "." + d[3:]
 
     def open_tune(self):
         p = self.cur()
-        self.tune = {"digits": "", "bw": p["bw"] if p["bw"] in BW_CHOICES else 1700, "stage": "freq"}
-        self.tune["shown"] = self._tune_shown()
+        f = "%06d" % int(round(p["freq"] * 1000))
+        self.tune = {"digits": list(f), "pos": 0, "stage": "freq",
+                     "bw": p["bw"] if p["bw"] in BW_CHOICES else 1700, "slot": 0}
+        self._tune_refresh()
         log("tune panel open")
-        self._redraw()
 
     def close_tune(self):
         self.tune = None
         self._redraw()
 
+    def _tune_refresh(self):
+        t = self.tune
+        t["digits"] = list("".join(t["digits"]))
+        t["shown"] = self._tune_shown()
+        t["freq"] = float("".join(t["digits"])) / 1000.0
+        self._redraw()
+
     def _tune_key(self, name):
         t = self.tune
-        if t["stage"] == "save":
-            if name.isdigit() and name != "0":
-                self.save_preset(int(name), t["freq"], t["bw"])
-            self.close_tune()
-            return
-        if name.isdigit():
-            if len(t["digits"]) < 6:
-                t["digits"] += name
-        elif name == "back":
-            if t["digits"]:
-                t["digits"] = t["digits"][:-1]
+        up = name in ("up", "ch_up")
+        down = name in ("down", "ch_down")
+        ok = name in ("select", "info", "play")
+        if name == "back":
+            if t["stage"] == "freq" and t["pos"] > 0:
+                t["pos"] -= 1
+            elif t["stage"] == "bw":
+                t["stage"] = "freq"
+            elif t["stage"] == "save":
+                self.close_tune()
+                return
             else:
                 self.close_tune()
                 return
-        elif name in ("up", "ch_up", "right", "down", "ch_down", "left"):
-            i = BW_CHOICES.index(t["bw"])
-            up = name in ("up", "left", "ch_down")          # same sense as the preset list
-            t["bw"] = BW_CHOICES[(i + (-1 if up else 1)) % len(BW_CHOICES)]
-        elif name in ("select", "info"):
-            if len(t["digits"]) < 3:
-                return
-            t["freq"] = float(t["digits"].ljust(6, "0")) / 1000.0
-            t["shown"] = self._tune_shown()
-            t["stage"] = "save"
-            self.tune_to(t["freq"], t["bw"])
-            self._redraw()
+            self._tune_refresh()
             return
-        t["shown"] = self._tune_shown()
-        self._redraw()
+
+        if t["stage"] == "freq":
+            if name.isdigit():                       # keypad, where there is one
+                t["digits"][t["pos"]] = name
+                t["pos"] = min(t["pos"] + 1, 5)
+            elif up or down:
+                d = int(t["digits"][t["pos"]])
+                t["digits"][t["pos"]] = str((d + (1 if up else -1)) % 10)
+            elif name == "right":
+                t["pos"] = min(t["pos"] + 1, 5)
+            elif name == "left":
+                t["pos"] = max(t["pos"] - 1, 0)
+            elif ok:
+                if t["pos"] < 5:
+                    t["pos"] += 1                    # OK steps through the digits
+                else:
+                    t["stage"] = "bw"
+            self._tune_refresh()
+            return
+
+        if t["stage"] == "bw":
+            if up or down or name in ("left", "right"):
+                i = BW_CHOICES.index(t["bw"])
+                fwd = up or name == "right"
+                t["bw"] = BW_CHOICES[(i + (1 if fwd else -1)) % len(BW_CHOICES)]
+            elif name.isdigit() and 1 <= int(name) <= len(BW_CHOICES):
+                t["bw"] = BW_CHOICES[int(name) - 1]
+            elif ok:
+                t["stage"] = "save"
+                t["slot"] = 0
+                self.tune_to(t["freq"], t["bw"])
+            self._tune_refresh()
+            return
+
+        # stage "save": 0 = don't store, 1-9 = that preset
+        if up or name == "right":
+            t["slot"] = (t["slot"] + 1) % 10
+        elif down or name == "left":
+            t["slot"] = (t["slot"] - 1) % 10
+        elif name.isdigit():
+            t["slot"] = int(name)
+        elif ok:
+            if t["slot"]:
+                self.save_preset(t["slot"], t["freq"], t["bw"])
+            self.close_tune()
+            return
+        self._tune_refresh()
 
     def tune_to(self, freq, bw, name=None):
         """Tune somewhere not in the presets (shown as preset 0, 'Manual')."""
@@ -755,18 +797,20 @@ class Receiver:
         if self.tune is not None:
             self._tune_key(name)
             return False
-        # 0 opens the tune panel: presets are 1-9, and every remote has a 0 -
-        # many TVs keep the colour keys for themselves and never send Red.
+        # shortcuts for remotes that have them (presets are 1-9, so 0 is free);
+        # "Tune" also sits after the last preset, for arrows-only remotes
         if name in ("0", "red", "menu"):
             self.open_tune()
             return False
-        keys = [k for k, _ in self.presets]
+        # "Tune" sits after the last preset, so arrows alone reach it
+        keys = [k for k, _ in self.presets] + ["tune"]
         # Up/Left move up the on-screen list (to a lower preset number), Down/Right
         # move down it. CH+/CH- follow the numbers, as on a TV.
+        here = keys.index(self.preset) if self.preset in keys else 0
         if name in ("down", "right", "ch_up"):
-            self.select(keys[(keys.index(self.preset) + 1) % len(keys)])
+            self.select(keys[(here + 1) % len(keys)])
         elif name in ("up", "left", "ch_down"):
-            self.select(keys[(keys.index(self.preset) - 1) % len(keys)])
+            self.select(keys[(here - 1) % len(keys)])
         elif name.isdigit():
             n = int(name)
             if n in keys and n != 0:
@@ -793,6 +837,9 @@ class Receiver:
         self.update_osd(force=True)
 
     def select(self, n):
+        if n == "tune":
+            self.open_tune()
+            return
         if n == self.preset and self.tuner:
             return
         self.preset = n

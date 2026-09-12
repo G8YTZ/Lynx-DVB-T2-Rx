@@ -109,7 +109,8 @@ From SSH:
 | Up / Down | move up / down the on-screen preset list |
 | CH+ / CH- | next / previous preset by number |
 | 0-9 | preset by number |
-| 0 (or Red / Menu) | tune to a new frequency, and store it |
+| Down past the last preset | **Tune...** - tune to a new frequency and store it |
+| 0, Red or Menu | the same panel, on remotes that have those keys |
 | OK or Info | OSD: full -> badge -> off (installs a waiting update when there is no picture) |
 | Back / Exit | hide the OSD |
 
@@ -118,8 +119,19 @@ If the keys don't reach the receiver, turn on the TV's HDMI-CEC control
 TV's input list as **Lynx DVB-T2 Rx**.
 
 ## 7a. Tuning from the remote
-Press **0** (presets are 1-9, so 0 is free; **Red** or **Menu** work too where
-the TV passes them). Type the frequency on the keypad - `437250` is
+**With any remote:** press **Down** past the last preset to reach **Tune...**.
+(On remotes with a keypad, **0**, **Red** or **Menu** open it directly.)
+
+The panel needs only the arrows and OK:
+
+1. **Frequency** - **Up/Down** changes the digit under the cursor, **OK** (or
+   **Right**) moves to the next digit, **BACK** to the previous one. After the
+   last digit, OK moves on.
+2. **Bandwidth** - **Up/Down** picks 1350 / 1700 / 2000 kHz, **OK** tunes there.
+3. **Store** - **Up/Down** picks the preset to store it in, or **no** to keep it
+   only until you change channel. **OK** confirms, **BACK** cancels.
+
+On a remote with a keypad you can also type the frequency - `437250` is
 437.250 MHz - using **Up/Down** to pick 1350 / 1700 / 2000 kHz, then **OK** to
 tune. The receiver then offers to store it: press **1-9** to put it in that
 preset, or **BACK** to keep it only until you change channel. **BACK** also

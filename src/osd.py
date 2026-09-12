@@ -182,36 +182,78 @@ def _render_mini(s, st, info):
 
 
 # ------------------------------------------------------------- tune panel
-def render_tune(width, t, presets):
-    """Panel for the on-screen tuning entry. t: dict(digits, bw, stage)."""
+def render_tune(width, t, presets=()):
+    """The tuning wizard. t: digits, pos, stage (freq|bw|save), bw, slot, shown.
+    Driven by arrows and OK alone; a keypad works too where there is one."""
     s = max(0.5, width / 1920.0) * 2.4
-    W, H = int(360 * s), int(150 * s)
+    W, H = int(380 * s), int(168 * s)
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     d.rounded_rectangle([0, 0, W - 1, H - 1], radius=12 * s, fill=BG_PANEL + (235,),
                         outline=ACCENT + (255,), width=max(2, int(2 * s)))
     x0, y = 18 * s, 12 * s
-    if t.get("stage") == "save":
-        d.text((x0, y), "Store preset", font=font(17 * s, bold=True), fill=TXT)
-        y += 30 * s
-        d.text((x0, y), "%s MHz   %s kHz" % (t["shown"], t["bw"]), font=font(20 * s, bold=True), fill=INFO)
-        y += 34 * s
-        d.text((x0, y), "Press 1-9 to store in that preset", font=font(14 * s), fill=TXT2)
-        y += 22 * s
-        d.text((x0, y), "BACK to keep it for now only", font=font(14 * s), fill=MUTED)
+    stage = t.get("stage", "freq")
+    titles = {"freq": "Tune - frequency", "bw": "Tune - bandwidth", "save": "Store this channel?"}
+    d.text((x0, y), titles[stage], font=font(16 * s, bold=True), fill=TXT)
+    y += 28 * s
+
+    # frequency, with the digit being edited underlined
+    f = font(30 * s, bold=True)
+    digits = "".join(t.get("digits", "000000"))
+    x = x0
+    for i, ch in enumerate(digits):
+        if i == 3:
+            d.text((x, y), ".", font=f, fill=TXT)
+            x += d.textlength(".", font=f)
+        live = (stage == "freq" and i == t.get("pos", 0))
+        d.text((x, y), ch, font=f, fill=ACCENT if live else TXT)
+        w = d.textlength(ch, font=f)
+        if live:
+            d.line([x, y + 34 * s, x + w, y + 34 * s], fill=ACCENT, width=max(2, int(3 * s)))
+        x += w
+    d.text((x + 8 * s, y + 10 * s), "MHz", font=font(15 * s), fill=MUTED)
+
+    # bandwidth
+    bw = t.get("bw", 1700)
+    bx = W - 18 * s
+    label = "%s kHz" % bw
+    if stage == "bw":
+        fb = font(20 * s, bold=True)
+        tw = d.textlength(label, font=fb)
+        d.rounded_rectangle([bx - tw - 16 * s, y + 2 * s, bx, y + 34 * s], radius=8 * s,
+                            fill=BG_HI, outline=ACCENT, width=2)
+        d.text((bx - 8 * s, y + 18 * s), label, font=fb, fill=ACCENT, anchor="rm")
+    else:
+        d.text((bx, y + 18 * s), label, font=font(18 * s, bold=True), fill=INFO, anchor="rm")
+    y += 50 * s
+
+    if stage == "save":
+        slot = t.get("slot", 0)
+        d.text((x0, y), "Preset", font=font(15 * s), fill=MUTED)
+        xx = x0 + 62 * s
+        for n in range(0, 10):
+            on = (n == slot)
+            lab = "no" if n == 0 else str(n)
+            fb = font(15 * s, bold=on)
+            w = max(d.textlength(lab, font=fb) + 12 * s, 26 * s)
+            d.rounded_rectangle([xx, y - 4 * s, xx + w, y + 20 * s], radius=6 * s,
+                                fill=BG_HI if on else BG_RAISED,
+                                outline=ACCENT if on else BG_HI, width=2 if on else 1)
+            d.text((xx + w / 2, y + 8 * s), lab, font=fb, fill=ACCENT if on else MUTED, anchor="mm")
+            xx += w + 4 * s
+        y += 32 * s
+        d.text((x0, y), "\u25b2\u25bc choose     OK confirm     BACK cancel",
+               font=font(14 * s), fill=TXT2)
         return img
-    d.text((x0, y), "Tune", font=font(17 * s, bold=True), fill=TXT)
-    d.text((W - 18 * s, y + 2 * s), "%s kHz" % t["bw"], font=font(16 * s, bold=True), fill=INFO, anchor="rm")
-    y += 30 * s
-    digits = t.get("digits", "")
-    shown = t["shown"]
-    d.text((x0, y), shown, font=font(30 * s, bold=True), fill=TXT if digits else MUTED)
-    d.text((x0 + 190 * s, y + 10 * s), "MHz", font=font(15 * s), fill=MUTED)
-    y += 44 * s
-    d.text((x0, y), "0-9 frequency   " + ("\u25b2\u25bc bandwidth" if not digits else "OK tune"),
-           font=font(14 * s), fill=TXT2)
-    y += 20 * s
-    d.text((x0, y), "BACK delete / exit", font=font(14 * s), fill=MUTED)
+
+    if stage == "freq":
+        hint1 = "\u25b2\u25bc change digit     \u25c0\u25b6 or OK  next"
+        hint2 = "BACK previous digit / exit     keypad works too"
+    else:
+        hint1 = "\u25b2\u25bc bandwidth     OK tune"
+        hint2 = "BACK back to the frequency"
+    d.text((x0, y), hint1, font=font(14 * s), fill=TXT2)
+    d.text((x0, y + 20 * s), hint2, font=font(14 * s), fill=MUTED)
     return img
 
 
@@ -288,17 +330,18 @@ def render_idle(W, H, st, info, presets, message=None, version=""):
     d.text((px, py), "PRESETS", font=font(24 * s, bold=True), fill=MUTED)
     py += 50 * s
     cur = str(info.get("preset", ""))
-    for key, p in presets:
+    for key, p in list(presets) + [("tune", {"name": "Tune...", "freq": None, "bw": ""})]:
         h = 52 * s
         on = (str(key) == cur)
         d.rounded_rectangle([px, py, px + pw, py + h], radius=12 * s,
                             fill=(BG_HI if on else BG_PANEL), outline=(ACCENT if on else BG_HI), width=2)
-        d.text((px + 20 * s, py + h / 2), str(key), font=font(26 * s, bold=True),
-               fill=(ACCENT if on else FAINT), anchor="lm")
+        d.text((px + 20 * s, py + h / 2), "" if key == "tune" else str(key),
+               font=font(26 * s, bold=True), fill=(ACCENT if on else FAINT), anchor="lm")
         d.text((px + 60 * s, py + h / 2), p.get("name", ""), font=font(24 * s, bold=on),
                fill=(TXT if on else TXT2), anchor="lm")
-        d.text((px + pw - 20 * s, py + h / 2), "%.3f  %s" % (p["freq"], p["bw"]),
-               font=font(20 * s), fill=MUTED, anchor="rm")
+        if p.get("freq") is not None:
+            d.text((px + pw - 20 * s, py + h / 2), "%.3f  %s" % (p["freq"], p["bw"]),
+                   font=font(20 * s), fill=MUTED, anchor="rm")
         py += h + 10 * s
         if py > 900 * s:
             break
@@ -306,6 +349,6 @@ def render_idle(W, H, st, info, presets, message=None, version=""):
     # footer
     d.rectangle([0, H - 70 * s, W, H], fill=BG_PANEL)
     d.text((60 * s, H - 35 * s),
-           "Remote:  \u25b2 \u25bc  preset     1-9  direct     0  tune     OK  info     BACK  hide",
+           "Remote:  \u25b2 \u25bc  preset, then Tune...     OK  info     BACK  hide",
            font=font(24 * s), fill=MUTED, anchor="lm")
     return img
