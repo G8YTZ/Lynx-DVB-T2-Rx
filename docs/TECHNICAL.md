@@ -275,6 +275,18 @@ CEC monitor and driver overrides need it) and restarts on failure. The
 installer masks PipeWire/WirePlumber: on images that have them they grab the
 HDMI sound device ("Device or resource busy").
 
+### 5.5a Web control
+`web.py` is Python's own `http.server` on a low-priority daemon thread: no
+framework, no dependencies, and idle (a socket waiting) until someone connects,
+so it costs nothing while receiving. Every request is answered from the
+receiver's state and turned into the same actions the remote uses, applied on
+the main loop via `GLib.idle_add`. Unauthenticated by design, for a home LAN;
+`web = off` disables it. The page itself is one small HTML file with no images
+that polls `/status` every 2 s.
+
+Preset edits rewrite `/etc/t2rx/presets.conf` through a temporary file and
+`os.replace`, so an interrupted write can't leave it empty or half-written.
+
 ### 5.6 Updates
 `update.py` asks the GitHub releases API for the latest tag (a minute after
 boot, then daily, in a background thread so nothing stalls if the network is

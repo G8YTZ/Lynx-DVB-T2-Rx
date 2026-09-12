@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """t2rx-ctl - control the DVB-T2 receiver from a shell.
-  t2rx-ctl status | preset N | next | prev | osd | back | reload | update"""
+  t2rx-ctl status | preset N | next | prev | osd | back | reload | update
+           tune MHZ KHZ | save SLOT [name] | delete SLOT"""
 import json, os, socket, sys
 if len(sys.argv) < 2:
     sys.exit(__doc__)

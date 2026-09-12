@@ -181,6 +181,40 @@ def _render_mini(s, st, info):
     return img
 
 
+# ------------------------------------------------------------- tune panel
+def render_tune(width, t, presets):
+    """Panel for the on-screen tuning entry. t: dict(digits, bw, stage)."""
+    s = max(0.5, width / 1920.0) * 2.4
+    W, H = int(360 * s), int(150 * s)
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle([0, 0, W - 1, H - 1], radius=12 * s, fill=BG_PANEL + (235,),
+                        outline=ACCENT + (255,), width=max(2, int(2 * s)))
+    x0, y = 18 * s, 12 * s
+    if t.get("stage") == "save":
+        d.text((x0, y), "Store preset", font=font(17 * s, bold=True), fill=TXT)
+        y += 30 * s
+        d.text((x0, y), "%s MHz   %s kHz" % (t["shown"], t["bw"]), font=font(20 * s, bold=True), fill=INFO)
+        y += 34 * s
+        d.text((x0, y), "Press 1-9 to store in that preset", font=font(14 * s), fill=TXT2)
+        y += 22 * s
+        d.text((x0, y), "BACK to keep it for now only", font=font(14 * s), fill=MUTED)
+        return img
+    d.text((x0, y), "Tune", font=font(17 * s, bold=True), fill=TXT)
+    d.text((W - 18 * s, y + 2 * s), "%s kHz" % t["bw"], font=font(16 * s, bold=True), fill=INFO, anchor="rm")
+    y += 30 * s
+    digits = t.get("digits", "")
+    shown = t["shown"]
+    d.text((x0, y), shown, font=font(30 * s, bold=True), fill=TXT if digits else MUTED)
+    d.text((x0 + 190 * s, y + 10 * s), "MHz", font=font(15 * s), fill=MUTED)
+    y += 44 * s
+    d.text((x0, y), "0-9 frequency   " + ("\u25b2\u25bc bandwidth" if not digits else "OK tune"),
+           font=font(14 * s), fill=TXT2)
+    y += 20 * s
+    d.text((x0, y), "BACK delete / exit", font=font(14 * s), fill=MUTED)
+    return img
+
+
 # -------------------------------------------------------------- idle page
 def idle_card_box(W, H):
     """Screen area of the live status card (for partial updates)."""

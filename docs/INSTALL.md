@@ -108,12 +108,47 @@ From SSH:
 |---|---|
 | Up / Down, CH+ / CH-, Left / Right | next / previous preset |
 | 0-9 | preset by number |
+| Red (or Menu) | tune to a new frequency, and store it |
 | OK or Info | OSD: full -> badge -> off (installs a waiting update when there is no picture) |
 | Back / Exit | hide the OSD |
 
 If the keys don't reach the receiver, turn on the TV's HDMI-CEC control
 (Anynet+, Bravia Sync, SimpLink, Viera Link, ...). The receiver appears in the
 TV's input list as **Lynx DVB-T2 Rx**.
+
+## 7a. Tuning from the remote
+Press **Red** (or **Menu**). Type the frequency on the keypad - `437250` is
+437.250 MHz - using **Up/Down** to pick 1350 / 1700 / 2000 kHz, then **OK** to
+tune. The receiver then offers to store it: press **1-9** to put it in that
+preset, or **BACK** to keep it only until you change channel. **BACK** also
+deletes digits, and leaves the panel when the entry is empty.
+
+## 7b. The web page
+Open **http://<receiver>:8080/** on a phone or PC on the same network: status,
+presets, tuning, and storing or deleting presets. There is no password, so
+leave it on your own network (`web = off` in `t2rx.conf` disables it).
+
+Anything the page does is a plain URL, so other systems (Home Assistant,
+Node-RED, a browser bookmark, `curl`) can drive the receiver directly:
+
+| URL | |
+|---|---|
+| `/status` | everything the receiver knows, as JSON |
+| `/preset/3` | select preset 3 |
+| `/next`, `/prev` | next / previous preset |
+| `/osd`, `/back` | cycle / hide the OSD |
+| `/tune?freq=437.250&bw=2000` | tune without storing |
+| `/save?slot=5&freq=437.250&bw=2000&name=GB3JT` | store a preset (freq/bw default to the current channel) |
+| `/delete?slot=5` | delete a preset |
+| `/update` | install a waiting update |
+
+For example, from a script or Home Assistant shell command:
+
+    curl -s "http://lynx-t2.local:8080/tune?freq=436.000&bw=1700"
+    curl -s http://lynx-t2.local:8080/status | jq .tuner.cnr
+
+The same commands work locally: `t2rx-ctl tune 437.250 2000`,
+`t2rx-ctl save 5 GB3JT`, `t2rx-ctl delete 5`.
 
 ## 8. Troubleshooting
 | Symptom | What to do |

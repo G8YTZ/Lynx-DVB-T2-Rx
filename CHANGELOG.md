@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8
+* **Tune and store from the remote.** Red (or Menu) opens a tuning panel: type
+  the frequency on the keypad (437250 = 437.250 MHz), Up/Down for 1350 / 1700 /
+  2000 kHz, OK to tune, then 1-9 to store it in that preset - or BACK to keep
+  it just for now. Presets are written to `/etc/t2rx/presets.conf` safely.
+* **Control web page and webhooks** on port 8080 (`web`, `web_port`): a small
+  status and control page, plus plain URLs for automation - `/status`,
+  `/preset/N`, `/next`, `/prev`, `/osd`, `/tune?freq=&bw=`,
+  `/save?slot=&freq=&bw=&name=`, `/delete?slot=`, `/update`. No dependencies,
+  idle until asked, on a low-priority thread.
+* `t2rx-ctl tune | save | delete` as well.
+
 ## 1.7
 * **Software updates, like a TV.** Checks GitHub for a new release a minute
   after boot and once a day, shows it on the status page, and (with

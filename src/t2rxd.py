@@ -34,12 +34,13 @@ sys.path.insert(0, HERE)
 import osd  # noqa: E402
 import fb as fbmod  # noqa: E402
 import update as updater  # noqa: E402
+import web as webmod  # noqa: E402
 try:
     import osdplane  # noqa: E402
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.7"
+VERSION = "t2rx 1.8"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -69,7 +70,7 @@ def read_conf():
         "audio": "hdmi:CARD=vc4hdmi,DEV=0", "scale": "kms", "osd": "auto", "osd_timeout": "15",
         "osd_plane": "auto", "audio_buffer_ms": "200", "audio_volume": "0.8",
         "osd_interval": "2", "start_buffer_ms": "1500", "max_buffer_ms": "8000",
-        "updates": "auto",
+        "updates": "auto", "web": "on", "web_port": "8080",
         "cec": "yes", "cec_name": "Lynx DVB-T2 Rx", "cec_active_source": "yes",
         "adapter": "0", "loss_seconds": "5"}})
     c.read(CONF)
@@ -93,6 +94,33 @@ def read_presets():
     if not out:
         out = [(1, {"name": "70cm T2 1.7", "freq": 436.0, "bw": 1700, "plp": 0})]
     return out
+
+
+BW_CHOICES = (1350, 1700, 2000)
+
+
+def write_presets(presets):
+    """Rewrite presets.conf from a list of (key, dict). Written via a temporary
+    file so a power cut can't leave it empty."""
+    lines = ["# /etc/t2rx/presets.conf - Lynx DVB-T2 Receiver presets (1-9).",
+             "# freq in MHz, bw in kHz: 1350, 1700 or 2000.", ""]
+    for key, p in sorted(presets):
+        lines += ["[%d]" % key, "name = %s" % p.get("name", "Preset %d" % key),
+                  "freq = %.3f" % p["freq"], "bw = %d" % int(p["bw"])]
+        if p.get("plp"):
+            lines.append("plp = %d" % int(p["plp"]))
+        lines.append("")
+    try:
+        os.makedirs(os.path.dirname(PRESETS), exist_ok=True)
+        with open(PRESETS + ".tmp", "w") as f:
+            f.write("\n".join(lines))
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(PRESETS + ".tmp", PRESETS)
+        return True
+    except OSError as e:
+        log("presets: %s" % e)
+        return False
 
 
 def display_par():
@@ -154,6 +182,7 @@ class Receiver:
         self.playing = False
         self.pause_t = 0.0
         self.over_t = None
+        self.tune = None             # on-screen tuning entry, see key()
         self.update_tag = None       # newer release found, shown on the status page
         self.updating = False
         self.safe_mode = False       # set if the OSD chain keeps failing: play without it
@@ -567,9 +596,10 @@ class Receiver:
             job, self._osd_job = self._osd_job, None
             if job is None or self.plane is None:
                 continue
-            mode, st, info = job
+            mode, st, info, tune = job
             s = self.plane.w / 800.0
-            img = osd.render_osd(self.plane.w, st, info, mode)
+            img = osd.render_tune(self.plane.w, tune, self.presets) if tune is not None \
+                else osd.render_osd(self.plane.w, st, info, mode)
             if not self.video_on or self.last_osd == "off":
                 continue                              # hidden while we were drawing
             if self.plane.show(img, 24 * s, 20 * s) != 0:
@@ -597,7 +627,7 @@ class Receiver:
             mode = "full" if now < self.osd_until else "mini"
         elif mode == "full" and self.osd_until and now >= self.osd_until and self.cfg.get("osd") == "auto":
             mode = "mini"
-        if mode == "off":
+        if mode == "off" and self.tune is None:
             if self.last_osd != "off":
                 if self.plane is not None:
                     self.plane.hide()
@@ -605,7 +635,7 @@ class Receiver:
                     self.osd_el.set_property("alpha", 0.0)
                 self.last_osd = "off"
             return
-        key = self._osd_key(mode)
+        key = self._osd_key(mode) if self.tune is None else ("tune", str(self.tune))
         interval = float(self.cfg.get("osd_interval", "2"))
         if not force and (key == self.last_osd or now - getattr(self, "_osd_t", 0) < interval):
             return                                   # unchanged, or redrawn too recently
@@ -613,7 +643,7 @@ class Receiver:
         self._osd_t = now
         if self.plane is not None:
             # drawn on a low-priority thread so a redraw can never hold up the audio
-            self._osd_job = (mode, dict(self.st), dict(self.info))
+            self._osd_job = (mode, dict(self.st), dict(self.info), self.tune and dict(self.tune))
             self._osd_event.set()
             return
         img = osd.render_osd(self.video_w, self.st, self.info, mode)
@@ -626,9 +656,107 @@ class Receiver:
         self.osd_el.set_property("pixbuf", pb)
         self.osd_el.set_property("alpha", 1.0)
 
+    # ------------------------------------------------------------ tuning
+    def _tune_shown(self):
+        d = self.tune["digits"]
+        if not d:
+            return "---.---"
+        return d[:3].ljust(3, "-") + "." + d[3:].ljust(3, "-")
+
+    def open_tune(self):
+        p = self.cur()
+        self.tune = {"digits": "", "bw": p["bw"] if p["bw"] in BW_CHOICES else 1700, "stage": "freq"}
+        self.tune["shown"] = self._tune_shown()
+        log("tune panel open")
+        self._redraw()
+
+    def close_tune(self):
+        self.tune = None
+        self._redraw()
+
+    def _tune_key(self, name):
+        t = self.tune
+        if t["stage"] == "save":
+            if name.isdigit() and name != "0":
+                self.save_preset(int(name), t["freq"], t["bw"])
+            self.close_tune()
+            return
+        if name.isdigit():
+            if len(t["digits"]) < 6:
+                t["digits"] += name
+        elif name == "back":
+            if t["digits"]:
+                t["digits"] = t["digits"][:-1]
+            else:
+                self.close_tune()
+                return
+        elif name in ("up", "ch_up", "right", "down", "ch_down", "left"):
+            i = BW_CHOICES.index(t["bw"])
+            t["bw"] = BW_CHOICES[(i + (1 if name in ("up", "ch_up", "right") else -1)) % len(BW_CHOICES)]
+        elif name in ("select", "info"):
+            if len(t["digits"]) < 3:
+                return
+            t["freq"] = float(t["digits"].ljust(6, "0")) / 1000.0
+            t["shown"] = self._tune_shown()
+            t["stage"] = "save"
+            self.tune_to(t["freq"], t["bw"])
+            self._redraw()
+            return
+        t["shown"] = self._tune_shown()
+        self._redraw()
+
+    def tune_to(self, freq, bw, name=None):
+        """Tune somewhere not in the presets (shown as preset 0, 'Manual')."""
+        log("tuning %.3f MHz %d kHz" % (float(freq), int(bw)))
+        self.presets = [(k, p) for k, p in self.presets if k != 0]
+        self.presets.insert(0, (0, {"name": name or "Manual", "freq": float(freq),
+                                    "bw": int(bw), "plp": 0}))
+        self.preset = 0
+        self.start()
+
+    def save_preset(self, slot, freq, bw, name=None):
+        label = {1350: "1.35", 1700: "1.7", 2000: "2.0"}.get(int(bw), str(bw))
+        ps = [(k, p) for k, p in self.presets if k not in (slot, 0)]
+        ps.append((slot, {"name": name or "%.3f %s" % (float(freq), label),
+                          "freq": float(freq), "bw": int(bw), "plp": 0}))
+        ps.sort()
+        if not write_presets(ps):
+            return False
+        log("preset %d saved: %.3f MHz %d kHz" % (slot, float(freq), int(bw)))
+        self.presets = ps
+        self.preset = slot
+        self._save_state()
+        self.start()
+        return True
+
+    def delete_preset(self, slot):
+        ps = [(k, p) for k, p in self.presets if k != slot]
+        if len(ps) == len(self.presets) or not [k for k, _ in ps if k != 0]:
+            return False
+        if not write_presets([(k, p) for k, p in ps if k != 0]):
+            return False
+        log("preset %d deleted" % slot)
+        self.presets = ps
+        if self.preset == slot:
+            self.preset = ps[0][0]
+            self.start()
+        return True
+
+    def _redraw(self):
+        if self.video_on:
+            self.update_osd(force=True)
+        else:
+            self.draw_idle(force=True)
+
     # ------------------------------------------------------------ control
     def key(self, name):
         log("key %s" % name)
+        if self.tune is not None:
+            self._tune_key(name)
+            return False
+        if name in ("red", "menu"):
+            self.open_tune()
+            return False
         keys = [k for k, _ in self.presets]
         if name in ("up", "ch_up", "right"):
             self.select(keys[(keys.index(self.preset) + 1) % len(keys)])
@@ -669,6 +797,40 @@ class Receiver:
             self.osd_mode = self.cfg.get("osd", "auto")
         self.start()
 
+    # ------------------------------------------------------------ web
+    def web_status(self):
+        return {"version": VERSION, "preset": self.preset, "tuner": self.st, "info": self.info,
+                "video": self.video_on, "osd": self.osd_mode, "update": self.update_tag,
+                "presets": [dict(key=k, **p) for k, p in self.presets]}
+
+    def web_cmd(self, cmd, **q):
+        def later(fn, *a):
+            GLib.idle_add(lambda: (fn(*a), False)[1])
+        if cmd == "preset":
+            later(self.key, str(int(q["slot"])))
+        elif cmd in ("next", "prev", "osd", "back"):
+            later(self.key, {"next": "up", "prev": "down", "osd": "select", "back": "back"}[cmd])
+        elif cmd == "tune":
+            later(self.tune_to, float(q["freq"]), int(q.get("bw", 1700)), q.get("name"))
+        elif cmd == "save":
+            slot = int(q["slot"])
+            freq = float(q.get("freq") or self.cur()["freq"])
+            bw = int(q.get("bw") or self.cur()["bw"])
+            later(self.save_preset, slot, freq, bw, q.get("name") or None)
+        elif cmd == "delete":
+            later(self.delete_preset, int(q["slot"]))
+        elif cmd == "update":
+            later(self.install_update)
+        elif cmd == "reload":
+            later(self._reload_presets)
+        else:
+            return {"error": "unknown command"}
+        return {"ok": cmd}
+
+    def _reload_presets(self):
+        self.presets = read_presets()
+        self.start()
+
     def _socket(self):
         try:
             os.unlink(SOCK)
@@ -700,6 +862,14 @@ class Receiver:
                     if tag:
                         self.update_tag = tag
                     reply = ("update %s available" % tag) if tag else "up to date (%s)" % VERSION
+            elif cmd[0] == "tune" and len(cmd) > 2:
+                self.tune_to(float(cmd[1]), int(cmd[2]))
+            elif cmd[0] == "save" and len(cmd) > 1:
+                c = self.cur()
+                reply = "saved" if self.save_preset(int(cmd[1]), c["freq"], c["bw"],
+                                                    " ".join(cmd[2:]) or None) else "save failed"
+            elif cmd[0] == "delete" and len(cmd) > 1:
+                reply = "deleted" if self.delete_preset(int(cmd[1])) else "delete failed"
             elif cmd[0] == "reload":
                 self.presets = read_presets()
                 self.start()
@@ -729,6 +899,8 @@ class Receiver:
         except (OSError, subprocess.TimeoutExpired):
             pass
         self._socket()
+        if self.cfg.get("web", "on") != "off":
+            webmod.serve(self, self.cfg.get("web_port", "8080"), log)
         if self.cfg.get("cec", "yes") == "yes" and os.path.exists("/dev/cec0"):
             try:
                 import cec
