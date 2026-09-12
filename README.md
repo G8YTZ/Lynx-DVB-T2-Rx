@@ -28,11 +28,18 @@ on digital ATV for very little.
   preset, frequency, bandwidth, the transmitted mode (constellation, code rate,
   guard interval, FFT), C/N with margin, signal level, TS rate, video and audio.
   Full panel for 15 s on lock or preset change, then a small callsign badge.
-* **Your TV's remote over HDMI-CEC** - up/down for presets, 0-9 direct, OK for
-  the OSD.
+* **Your TV's remote over HDMI-CEC** - up/down the preset list, 0-9 direct,
+  OK for the OSD, and **Red to tune**: type a frequency on the keypad, pick the
+  bandwidth, then store it in a preset. No keyboard, no SSH.
 * **HDMI identification** - appears on the TV as *Lynx DVB-T2 Rx* and switches
   the TV to itself at start-up.
-* **Nine presets**, each with its own frequency and bandwidth.
+* **Nine presets**, each with its own frequency and bandwidth, editable from
+  the remote, the web page or a text file.
+* **Web page and webhooks** on port 8080 - status, presets and tuning from a
+  phone, and plain URLs (`/status`, `/preset/3`, `/tune?freq=&bw=`,
+  `/save?slot=&name=`) for Home Assistant, Node-RED or `curl`.
+* **Updates itself** from GitHub, like a TV: it checks at boot and daily, shows
+  what's waiting on screen, and installs only when nothing is being received.
 * **Hardware H.264 decoding**, and the right picture shape on any monitor.
 
 ## Screens
@@ -77,11 +84,12 @@ persuaded to receive the non-standard ones.
     driver/install_driver.sh      # optional: 1350 and 2000 kHz
     sudo reboot
 
-Full instructions: **[Install Guide](docs/INSTALL.md)**.
+Full instructions, including tuning from the remote and the webhook URLs:
+**[Install Guide](docs/INSTALL.md)**.
 How it works: **[Technical Guide](docs/TECHNICAL.md)**.
 
 ## Status
-Version 1.1. Tested on a Raspberry Pi Zero W v1.1 with Raspberry Pi OS Lite
+Version 1.8. Tested on a Raspberry Pi Zero W v1.1 with Raspberry Pi OS Lite
 (32-bit), receiving a Portsdown 4 (DVB-T2, LimeSDR Mini) on 436 MHz at 1.7 MHz,
 QPSK 1/2. Reports from other boards are very welcome.
 

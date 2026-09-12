@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.3
+* README brought up to date: tuning from the remote, the web page and
+  webhooks, and automatic updates.
+
 ## 1.8.2
 * Fix: the update check only asked for the latest GitHub *release*, which does
   not exist until one is published, so pushed tags were never seen. It now
