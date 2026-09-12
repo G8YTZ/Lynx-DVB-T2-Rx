@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.4
+* Tuning is now on the **0** key: presets are 1-9 and every remote has a 0,
+  whereas many TVs and AV receivers keep the colour keys for themselves and
+  never send Red over CEC. Red and Menu still work where they are passed
+  through. The on-screen footer says so.
+
 ## 1.8.3
 * README brought up to date: tuning from the remote, the web page and
   webhooks, and automatic updates.

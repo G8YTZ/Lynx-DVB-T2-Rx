@@ -40,7 +40,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.8.3"
+VERSION = "t2rx 1.8.4"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -755,7 +755,9 @@ class Receiver:
         if self.tune is not None:
             self._tune_key(name)
             return False
-        if name in ("red", "menu"):
+        # 0 opens the tune panel: presets are 1-9, and every remote has a 0 -
+        # many TVs keep the colour keys for themselves and never send Red.
+        if name in ("0", "red", "menu"):
             self.open_tune()
             return False
         keys = [k for k, _ in self.presets]
@@ -767,7 +769,7 @@ class Receiver:
             self.select(keys[(keys.index(self.preset) - 1) % len(keys)])
         elif name.isdigit():
             n = int(name)
-            if n in keys:
+            if n in keys and n != 0:
                 self.select(n)
         elif name in ("select", "info"):
             if self.update_tag and not self.video_on and not self.updating:
