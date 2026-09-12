@@ -40,7 +40,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.8"
+VERSION = "t2rx 1.8.1"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -692,7 +692,8 @@ class Receiver:
                 return
         elif name in ("up", "ch_up", "right", "down", "ch_down", "left"):
             i = BW_CHOICES.index(t["bw"])
-            t["bw"] = BW_CHOICES[(i + (1 if name in ("up", "ch_up", "right") else -1)) % len(BW_CHOICES)]
+            up = name in ("up", "left", "ch_down")          # same sense as the preset list
+            t["bw"] = BW_CHOICES[(i + (-1 if up else 1)) % len(BW_CHOICES)]
         elif name in ("select", "info"):
             if len(t["digits"]) < 3:
                 return
@@ -758,9 +759,11 @@ class Receiver:
             self.open_tune()
             return False
         keys = [k for k, _ in self.presets]
-        if name in ("up", "ch_up", "right"):
+        # Up/Left move up the on-screen list (to a lower preset number), Down/Right
+        # move down it. CH+/CH- follow the numbers, as on a TV.
+        if name in ("down", "right", "ch_up"):
             self.select(keys[(keys.index(self.preset) + 1) % len(keys)])
-        elif name in ("down", "ch_down", "left"):
+        elif name in ("up", "left", "ch_down"):
             self.select(keys[(keys.index(self.preset) - 1) % len(keys)])
         elif name.isdigit():
             n = int(name)

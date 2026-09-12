@@ -305,6 +305,7 @@ def render_idle(W, H, st, info, presets, message=None, version=""):
 
     # footer
     d.rectangle([0, H - 70 * s, W, H], fill=BG_PANEL)
-    d.text((60 * s, H - 35 * s), "Remote:  \u25b2 \u25bc  or  CH+/CH-  preset     0-9  direct     OK  on-screen info     BACK  hide",
+    d.text((60 * s, H - 35 * s),
+           "Remote:  \u25b2 \u25bc  preset     0-9  direct     RED  tune     OK  info     BACK  hide",
            font=font(24 * s), fill=MUTED, anchor="lm")
     return img

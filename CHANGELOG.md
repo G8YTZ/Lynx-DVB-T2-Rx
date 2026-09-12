@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.1
+* Fix: Up and Down were the wrong way round for presets. Up now moves up the
+  on-screen preset list (to a lower number) and Down moves down it; CH+/CH-
+  still follow the numbers, as on a TV. Bandwidth in the tune panel matches.
+
 ## 1.8
 * **Tune and store from the remote.** Red (or Menu) opens a tuning panel: type
   the frequency on the keypad (437250 = 437.250 MHz), Up/Down for 1350 / 1700 /

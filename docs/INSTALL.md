@@ -106,7 +106,8 @@ From SSH:
 ## 7. The TV remote
 | Key | Action |
 |---|---|
-| Up / Down, CH+ / CH-, Left / Right | next / previous preset |
+| Up / Down | move up / down the on-screen preset list |
+| CH+ / CH- | next / previous preset by number |
 | 0-9 | preset by number |
 | Red (or Menu) | tune to a new frequency, and store it |
 | OK or Info | OSD: full -> badge -> off (installs a waiting update when there is no picture) |
