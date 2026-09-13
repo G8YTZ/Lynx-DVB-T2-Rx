@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.15
+* **Update checks no longer run into GitHub's request limit.** Sixty requests an
+  hour are allowed per address, and a busy day of releases used them up - after
+  which every check silently found nothing. Now: one conditional request per
+  check (a 304 "unchanged" reply costs no quota at all), the limit is recognised
+  and waited out rather than hammered, and a failed check says so in the log
+  instead of looking like "no update".
+* Checks hourly rather than every four hours.
+
 ## 1.9.14
 * **You can now retune while watching.** The preset list only existed on the
   status page, so with a picture on screen there was no way to see where you

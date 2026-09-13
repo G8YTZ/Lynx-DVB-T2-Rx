@@ -41,7 +41,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.14"
+VERSION = "t2rx 1.9.15"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -473,7 +473,7 @@ class Receiver:
             return True
 
         def work():
-            tag = updater.check(VERSION)
+            tag = updater.check(VERSION, log=log)
             if tag:
                 GLib.idle_add(self._found_update, tag)
         threading.Thread(target=work, daemon=True).start()
@@ -1016,7 +1016,7 @@ class Receiver:
                     self.install_update()
                     reply = "installing %s" % self.update_tag
                 else:
-                    tag = updater.check(VERSION)
+                    tag = updater.check(VERSION, log=log)
                     if tag:
                         self.update_tag = tag
                     reply = ("update %s available" % tag) if tag else "up to date (%s)" % VERSION
@@ -1071,7 +1071,7 @@ class Receiver:
         self.start()
         GLib.timeout_add(500, self.tick)
         GLib.timeout_add_seconds(60, self.check_updates)          # shortly after boot
-        GLib.timeout_add_seconds(4 * 3600, self.check_updates)    # and every 4 hours
+        GLib.timeout_add_seconds(3600, self.check_updates)        # and hourly
         self.loop.run()
 
     def quit(self):

@@ -196,7 +196,9 @@ middle of a transmission. In `/etc/t2rx/t2rx.conf`:
 | `notify` | show it on the status page; press OK on the remote to install |
 | `off` | no checking |
 
-By hand: `t2rx-ctl update` (checks, and installs if one is waiting), or
+If the log says the hourly limit was reached, that is GitHub rather than the
+receiver: sixty requests an hour are allowed per address, and it clears by
+itself. By hand: `t2rx-ctl update` (checks, and installs if one is waiting), or
 
     cd ~/Lynx-DVB-T2-Rx && git pull && ./install.sh
 

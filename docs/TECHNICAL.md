@@ -387,8 +387,11 @@ Preset edits rewrite `/etc/t2rx/presets.conf` through a temporary file and
 `os.replace`, so an interrupted write can't leave it empty or half-written.
 
 ### 6.6 Updates
-`update.py` asks the GitHub releases API for the latest release and the tag
-list (a pushed tag is enough; no release need be published), takes the newest (a minute after
+`update.py` asks GitHub for the tag list (a pushed tag is enough; no release need
+be published) with an `If-None-Match` header, so an unchanged answer comes back
+304 and costs nothing against the sixty-requests-an-hour limit; the limit itself
+is recognised and waited out, and failures are logged rather than passed off as
+"no update". It takes the newest (a minute after
 boot, then daily, in a background thread so nothing stalls if the network is
 slow or absent) and compares it with the running version. With `updates = auto`
 the receiver installs it only while nothing is being received - never during a

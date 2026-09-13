@@ -10,6 +10,8 @@ import json
 import os
 import re
 import subprocess
+import time
+import urllib.error
 import urllib.request
 
 REPO = "G8YTZ/Lynx-DVB-T2-Rx"
@@ -51,34 +53,93 @@ def find_checkout():
     return None
 
 
-def _get(url, timeout):
+STATE = "/var/lib/t2rx/update.json"
+
+
+def _state():
+    try:
+        with open(STATE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_state(d):
+    try:
+        os.makedirs(os.path.dirname(STATE), exist_ok=True)
+        with open(STATE + ".tmp", "w") as f:
+            json.dump(d, f)
+        os.replace(STATE + ".tmp", STATE)
+    except OSError:
+        pass
+
+
+def _get(url, timeout, etag=None):
+    """Returns (data, etag, status). A conditional request that comes back 304 -
+    nothing has changed - does not count against GitHub's hourly limit, so the
+    receiver can look often without using its sixty requests up."""
     req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
                                                "User-Agent": "lynx-dvbt2-rx"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.load(r)
+    if etag:
+        req.add_header("If-None-Match", etag)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.load(r), r.headers.get("ETag"), 200
+    except urllib.error.HTTPError as e:
+        if e.code == 304:
+            return None, etag, 304
+        if e.code == 403 and e.headers.get("x-ratelimit-remaining") == "0":
+            try:
+                until = int(e.headers.get("x-ratelimit-reset", "0"))
+            except ValueError:
+                until = 0
+            raise RateLimited(until)
+        raise
 
 
-def latest(timeout=15):
-    """Newest version tag on GitHub, from the releases API, or the plain tag list
-    if no release has been published (a pushed tag is enough)."""
+class RateLimited(Exception):
+    def __init__(self, until):
+        super().__init__("GitHub hourly request limit reached")
+        self.until = until
+
+
+def latest(timeout=15, log=None):
+    """Newest version tag on GitHub, or None. Uses one conditional request; the
+    releases API is only consulted if the tag list is unavailable."""
+    st = _state()
+    now = time.time()
+    if now < st.get("blocked_until", 0):
+        if log:
+            log("update: waiting for GitHub's hourly limit to reset (%d min)"
+                % max(1, int((st["blocked_until"] - now) / 60)))
+        return st.get("tag")
+    try:
+        data, etag, code = _get(API_TAGS, timeout, st.get("etag"))
+    except RateLimited as e:
+        st["blocked_until"] = e.until or (now + 3600)
+        _save_state(st)
+        if log:
+            log("update: GitHub hourly limit reached - trying again later")
+        return st.get("tag")
+    except Exception as e:
+        if log:
+            log("update: check failed (%s)" % str(e)[:80])
+        return st.get("tag")
+    if code == 304:
+        return st.get("tag")                       # unchanged since we last looked
     best = ""
-    try:
-        best = _get(API_RELEASE, timeout).get("tag_name", "") or ""
-    except Exception:
-        pass
-    try:
-        for t in _get(API_TAGS, timeout):
-            name = t.get("name", "")
-            if _ver(name) > _ver(best):
-                best = name
-    except Exception:
-        pass
+    for t in data or []:
+        name = t.get("name", "")
+        if _ver(name) > _ver(best):
+            best = name
+    st.update(etag=etag, tag=best or None, blocked_until=0)
+    _save_state(st)
     return best or None
 
 
-def check(current, timeout=15):
+def check(current, timeout=15, log=None):
     """The newest tag on GitHub if it is newer than `current`, else None."""
-    tag = latest(timeout)
+    tag = latest(timeout, log)
     return tag if tag and _ver(tag) > _ver(current) else None
 
 
