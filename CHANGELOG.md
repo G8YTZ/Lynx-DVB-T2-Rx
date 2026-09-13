@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.19
+* **Picture shape.** The receiver now fits the picture to the screen at the shape
+  the stream says it is, letterboxing or pillarboxing as needed, instead of
+  stretching it to fill. `aspect` in t2rx.conf overrides it - `16:9` or `4:3` for
+  a transmitter that labels its video wrongly, `stretch` for the old behaviour.
+* **Down-converter support.** A preset can carry `lo`, the converter's local
+  oscillator in MHz: give the frequency you are really listening to and the
+  receiver subtracts the LO before tuning, then shows the real frequency on
+  screen. So a 23cm preset reads 1325.000 while the tuner sees 437.000.
+* The driver's upper limit raised from 862 MHz to 1002 MHz, which is roughly
+  where the CXD2880's own tuner runs out. 23cm still needs a converter.
+
 ## 1.9.17
 * **It now shows the frequency the signal is actually on.** A tuner set to a
   narrow bandwidth will happily pull in a carrier some way off the frequency it

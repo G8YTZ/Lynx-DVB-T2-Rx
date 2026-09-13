@@ -1844,7 +1844,7 @@ static struct dvb_frontend_ops cxd2880_dvbt_t2_ops = {
 	.info = {
 		.name = "Sony CXD2880",
 		.frequency_min_hz = 40 * MHz,
-		.frequency_max_hz = 862 * MHz,
+		.frequency_max_hz = 1002 * MHz,   /* the CXD2880 tuner runs to about 1 GHz */
 		.frequency_stepsize_hz = 1 * kHz,
 		.caps = FE_CAN_INVERSION_AUTO |
 				FE_CAN_FEC_1_2 |

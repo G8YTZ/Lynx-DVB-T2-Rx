@@ -41,7 +41,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.17"
+VERSION = "t2rx 1.9.19"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -52,7 +52,12 @@ SOCK = "/run/t2rx.sock"
 LOG = "/var/log/t2rx.log"
 NB = "/sys/module/cxd2880/parameters"
 # driver override per bandwidth: (nb_fs_hz, nb_if_bw); 1700 = stock driver
-BW_TABLE = {1700: (0, -1), 2000: (2285714, 0), 1350: (1542857, 3)}
+# bandwidth -> (nb_fs_hz, nb_if_bw) driver overrides. 0/-1 means none is needed:
+# 1.7, 5, 6, 7 and 8 MHz are standard DVB-T2 modes the tuner already knows, and
+# only 1350 and 2000 kHz require the patched driver.
+BW_TABLE = {1350: (1542857, 3), 1700: (0, -1), 2000: (2285714, 0),
+            5000: (0, -1), 6000: (0, -1), 7000: (0, -1), 8000: (0, -1)}
+STANDARD_BW = (1700, 5000, 6000, 7000, 8000)      # no driver patch needed
 
 
 def log(msg):
@@ -71,7 +76,7 @@ def read_conf():
         "audio": "hdmi:CARD=vc4hdmi,DEV=0", "scale": "kms", "osd": "auto", "osd_timeout": "15",
         "osd_plane": "auto", "audio_buffer_ms": "200", "audio_volume": "0.8",
         "osd_interval": "2", "start_buffer_ms": "1500", "max_buffer_ms": "8000",
-        "updates": "auto", "web": "on", "web_port": "8080",
+        "updates": "auto", "web": "on", "web_port": "8080", "aspect": "auto",
         "cec": "yes", "cec_name": "Lynx DVB-T2 Rx", "cec_active_source": "yes",
         "adapter": "0", "loss_seconds": "5"}})
     c.read(CONF)
@@ -88,7 +93,8 @@ def read_presets():
             p = c[sec]
             bw = int(p.get("bw", "1700"))
             out.append((key, {"name": p.get("name", "Preset %d" % key), "freq": float(p.get("freq", "436")),
-                              "bw": bw, "plp": int(p.get("plp", "0"))}))
+                              "bw": bw, "plp": int(p.get("plp", "0")),
+                              "lo": float(p.get("lo", "0"))}))
         except ValueError:
             continue
     out.sort()
@@ -97,7 +103,16 @@ def read_presets():
     return out
 
 
-BW_CHOICES = (1350, 1700, 2000)
+BW_CHOICES = (1350, 1700, 2000, 5000, 6000, 7000, 8000)
+
+
+def tuner_freq(p):
+    """What to ask the tuner for. With a converter the receiver works in the band
+    you are actually listening to, and subtracts the local oscillator here - so a
+    23cm preset reads 1325.000 on screen while the tuner sees 437.000."""
+    lo = float(p.get("lo", 0) or 0)
+    f = float(p["freq"]) - lo
+    return abs(f) if lo else f
 
 
 def write_presets(presets):
@@ -108,6 +123,8 @@ def write_presets(presets):
     for key, p in sorted(presets):
         lines += ["[%d]" % key, "name = %s" % p.get("name", "Preset %d" % key),
                   "freq = %.3f" % p["freq"], "bw = %d" % int(p["bw"])]
+        if p.get("lo"):
+            lines.append("lo = %.3f" % float(p["lo"]))
         if p.get("plp"):
             lines.append("plp = %d" % int(p["plp"]))
         lines.append("")
@@ -220,7 +237,7 @@ class Receiver:
         fs, ifb = BW_TABLE.get(bw, (0, -1))
         self.warning = None
         if not os.path.exists(NB + "/nb_fs_hz"):
-            if bw != 1700:
+            if bw not in STANDARD_BW:
                 self.warning = "%d kHz needs the patched cxd2880 driver" % bw
             return
         for name, val in (("nb_fs_hz", fs), ("nb_if_bw", ifb)):
@@ -240,12 +257,17 @@ class Receiver:
         p = self.cur()
         self.set_driver(p["bw"])
         self.info = {"preset": self.preset, "name": p["name"], "freq": p["freq"], "bw": p["bw"],
+                     "lo": p.get("lo", 0),
                      "callsign": "", "provider": "", "video": "", "audio": "", "warning": self.warning}
         self.st = {"state": "NOSIG"}
         self.video_on = False
         self.message = None
-        log("tune P%d %s %.3f MHz %d kHz" % (self.preset, p["name"], p["freq"], p["bw"]))
-        args = [ENV("T2RX_TUNER", os.path.join(HERE, "t2rx")), "-f", str(int(round(p["freq"] * 1e6))), "-b", "1.7",
+        log("tune P%d %s %.3f MHz %d kHz%s" % (self.preset, p["name"], p["freq"], p["bw"],
+            ("  (converter LO %.3f, tuner at %.3f)" % (p["lo"], tuner_freq(p))) if p.get("lo") else ""))
+        # the narrow modes are tuned as 1.7 MHz with the driver overrides set;
+        # the standard ones are simply asked for by name
+        bw_arg = "1.7" if p["bw"] in (1350, 1700, 2000) else str(p["bw"] / 1000.0)
+        args = [ENV("T2RX_TUNER", os.path.join(HERE, "t2rx")), "-f", str(int(round(tuner_freq(p) * 1e6))), "-b", bw_arg,
                 "-p", str(p["plp"]), "-a", self.cfg.get("adapter", "0"), "-s", STATUS,
                 "-l", self.cfg.get("loss_seconds", "5"), "-q"]
         try:
@@ -350,9 +372,47 @@ class Receiver:
             w, h = s.get_value("width"), s.get_value("height")
             fr = s.get_fraction("framerate")
             fps = (fr[1] / fr[2]) if fr and fr[0] and fr[2] else 0
+            par = s.get_fraction("pixel-aspect-ratio")
+            pn, pd = (par[1], par[2]) if par and par[0] and par[2] else (1, 1)
             self.video_w = w or 800
+            GLib.idle_add(self._shape_picture, gen, w, h, pn, pd)
             GLib.idle_add(self._video_started, gen, "H.264 %dx%d %s" % (w, h, ("%g fps" % fps) if fps else ""))
         return Gst.PadProbeReturn.REMOVE
+
+    def _shape_picture(self, gen, w, h, pn, pd):
+        """Fit the picture to the screen at the right shape, letterboxing or
+        pillarboxing as needed. aspect = auto uses the stream's own pixel shape;
+        16:9 or 4:3 overrides a transmitter that labels it wrongly; stretch fills
+        the screen regardless."""
+        if gen != self.gen or not self.pipe or not w or not h:
+            return False
+        want = self.cfg.get("aspect", "auto")
+        if want == "stretch":
+            return False                              # leave the sink to fill the screen
+        if want in ("16:9", "4:3"):
+            a, b = (16, 9) if want == "16:9" else (4, 3)
+            dar = a / float(b)
+        else:
+            dar = (w * pn) / float(h * pd)            # the stream's own shape
+        sw, sh = (self.plane.w, self.plane.h) if self.plane is not None else (self.fb.w, self.fb.h)
+        if not sw or not sh:
+            return False
+        if dar >= sw / float(sh):
+            rw, rh = sw, int(round(sw / dar))         # letterbox
+        else:
+            rh, rw = sh, int(round(sh * dar))         # pillarbox
+        rx, ry = (sw - rw) // 2, (sh - rh) // 2
+        sink = self.pipe.get_by_name("vsink") if self.pipe else None
+        if sink is None:
+            return False
+        try:
+            va = Gst.ValueArray((rx, ry, rw, rh))
+            sink.set_property("render-rectangle", va)
+            if (rw, rh) != (sw, sh):
+                log("picture shape %d:%d - shown %dx%d at %d,%d" % (w * pn, h * pd, rw, rh, rx, ry))
+        except (TypeError, AttributeError) as e:
+            log("picture shape: %s" % e)
+        return False
 
     def _video_started(self, gen, vinfo):
         if gen != self.gen:
@@ -832,15 +892,16 @@ class Receiver:
         log("tuning %.3f MHz %d kHz" % (float(freq), int(bw)))
         self.presets = [(k, p) for k, p in self.presets if k != 0]
         self.presets.insert(0, (0, {"name": name or "Manual", "freq": float(freq),
-                                    "bw": int(bw), "plp": 0}))
+                                    "bw": int(bw), "plp": 0, "lo": self.cur().get("lo", 0)}))
         self.preset = 0
         self.start()
 
     def save_preset(self, slot, freq, bw, name=None):
-        label = {1350: "1.35", 1700: "1.7", 2000: "2.0"}.get(int(bw), str(bw))
+        label = {1350: "1.35", 1700: "1.7", 2000: "2.0"}.get(int(bw), "%g" % (int(bw) / 1000.0))
         ps = [(k, p) for k, p in self.presets if k not in (slot, 0)]
         ps.append((slot, {"name": name or "%.3f %s" % (float(freq), label),
-                          "freq": float(freq), "bw": int(bw), "plp": 0}))
+                          "freq": float(freq), "bw": int(bw), "plp": 0,
+                          "lo": self.cur().get("lo", 0)}))
         ps.sort()
         if not write_presets(ps):
             return False
