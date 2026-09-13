@@ -41,7 +41,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.15"
+VERSION = "t2rx 1.9.16"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -467,17 +467,17 @@ class Receiver:
             pass
 
     # ------------------------------------------------------------ updates
-    def check_updates(self):
-        """Look for a new release, in the background: shortly after boot and daily."""
-        if self.cfg.get("updates", "auto") == "off" or self.updating:
-            return True
-
-        def work():
-            tag = updater.check(VERSION, log=log)
-            if tag:
-                GLib.idle_add(self._found_update, tag)
-        threading.Thread(target=work, daemon=True).start()
-        return True
+    def check_updates(self, repeat=True):
+        """Look for a new release, in the background. Returning True keeps a GLib
+        timer running, so the boot check must return False - as written, it asked
+        GitHub every 60 seconds and used up the hourly request limit by itself."""
+        if self.cfg.get("updates", "auto") != "off" and not self.updating:
+            def work():
+                tag = updater.check(VERSION, log=log)
+                if tag:
+                    GLib.idle_add(self._found_update, tag)
+            threading.Thread(target=work, daemon=True).start()
+        return repeat
 
     def _found_update(self, tag):
         if tag != self.update_tag:
@@ -1070,8 +1070,8 @@ class Receiver:
             GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, sig, self.quit)
         self.start()
         GLib.timeout_add(500, self.tick)
-        GLib.timeout_add_seconds(60, self.check_updates)          # shortly after boot
-        GLib.timeout_add_seconds(3600, self.check_updates)        # and hourly
+        GLib.timeout_add_seconds(60, self.check_updates, False)   # once, shortly after boot
+        GLib.timeout_add_seconds(3600, self.check_updates)        # and hourly after that
         self.loop.run()
 
     def quit(self):

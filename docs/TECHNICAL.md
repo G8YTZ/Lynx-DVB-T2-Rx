@@ -387,6 +387,12 @@ Preset edits rewrite `/etc/t2rx/presets.conf` through a temporary file and
 `os.replace`, so an interrupted write can't leave it empty or half-written.
 
 ### 6.6 Updates
+Checks run once a minute after boot, and hourly after that. (A GLib timer keeps
+repeating while its callback returns True, so the boot check must return False -
+as first written it asked GitHub every 60 seconds, which is exactly the sixty
+unauthenticated requests an hour GitHub allows per IP address: the receiver
+exhausted its own quota, and every check then quietly found nothing.)
+
 `update.py` asks GitHub for the tag list (a pushed tag is enough; no release need
 be published) with an `If-None-Match` header, so an unchanged answer comes back
 304 and costs nothing against the sixty-requests-an-hour limit; the limit itself

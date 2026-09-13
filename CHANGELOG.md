@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.16
+* **The real cause of the update trouble.** The check meant to run once, a minute
+  after boot, was written as a repeating timer - so the receiver asked GitHub
+  every 60 seconds, which is exactly the sixty-an-hour limit. It exhausted its
+  own quota, and every check then quietly found nothing. It now runs once at
+  boot and hourly after that.
+
 ## 1.9.15
 * **Update checks no longer run into GitHub's request limit.** Sixty requests an
   hour are allowed per address, and a busy day of releases used them up - after
