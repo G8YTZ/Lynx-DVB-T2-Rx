@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.9.13
+* The display decides the resolution. Any forced HDMI mode is removed at install
+  (including the ones 1.9.11 and 1.9.12 could add), so the Pi negotiates with the
+  monitor or television like any other source. `hdmi` in t2rx.conf now defaults to
+  `auto`, and is only there to override a display that chooses badly.
+
+## 1.9.11
+* Any forced HDMI mode from an earlier install is removed rather than added to -
+  a fixed mode left over from a small monitor was letterboxing the picture on a
+  4K television.
+* `scale = fix` is migrated to `kms` on update: the pixel-shape correction was
+  only ever for monitors that report their physical size wrongly, and on a
+  television it makes the picture too wide - which also shows as bars.
+
 ## 1.9.10
 * Technical Guide: new background section on forward error correction (from CDs
   and hard disks to deep space), what DVB-T does, what DVB-T2 adds and why it is

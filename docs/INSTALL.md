@@ -175,6 +175,8 @@ The same commands work locally: `t2rx-ctl tune 437.250 2000`,
 | Nothing responds - remote or web | The tune panel may be open (it takes every key); press BACK a few times, or wait 90 s for it to close. |
 | Sound breaks up | Check `t2rx.log` says `OSD on display plane` (if `blended`, the CPU is overloaded). Raise `audio_buffer_ms` (e.g. 400), or `osd_interval`. Distortion only on loud peaks: lower `audio_volume` (e.g. 0.7). |
 | Remote does nothing | Enable CEC on the TV; try another HDMI input; `cec-ctl` should show the Pi. |
+| Black bars above and below on a TV | Re-run `./install.sh` and reboot: it clears any forced HDMI mode so the display chooses. Then set the TV's picture size to "Just Scan" / "Screen Fit" / "1:1" - many letterbox whatever they are sent. |
+| The display chooses badly | Put a mode in `t2rx.conf`, e.g. `hdmi = 1280x720@60`, re-run `./install.sh` and reboot. |
 | Picture slightly too narrow or wide | The monitor reports its size wrongly (common on small Pi displays; TVs are fine). Set `osd_plane = off` and `scale = fix` to correct it, at the cost of more CPU. |
 
 ![Status page warning that the patched driver is missing](images/status_driver_warning.png)
