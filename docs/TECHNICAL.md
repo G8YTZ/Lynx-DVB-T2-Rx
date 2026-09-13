@@ -192,6 +192,7 @@ principle a non-standard bandwidth is just a different number in one register.
 |---|---|
 | `nb_fs_hz` | signal sample clock in Hz; the driver writes 192/Fs to the nominal-rate register (0 = off) |
 | `nb_if_bw` | tuner IF filter code (0 = 5/6 MHz, 1 = 7, 2 = 8, 3 = 1.7 MHz; -1 = off) |
+| `nb_offset_khz` | read-only: the carrier offset the demodulator measured, so the receiver can show where the signal really is |
 | `nb_reg4a` | demodulator bandwidth code (-1 = off) |
 | `nb_nomi_shift`, `nb_reg15`, `nb_poke_reg`/`nb_poke_val` | experimental: hunting for more nominal-rate range |
 | `nb_t_gtdofst`, `nb_t_sst`, `nb_t_notch`, `nb_t_notch2` | DVB-T timing offset, symbol sync and notch overrides (the narrowband DVB-T experiments) |

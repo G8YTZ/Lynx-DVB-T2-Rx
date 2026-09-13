@@ -132,7 +132,13 @@ def render_osd(video_w, st, info, mode="full"):
     pre = "P%s  %s" % (info.get("preset", "?"), info.get("name", ""))
     d.text((x0, y), pre + ("   " + sub if sub and sub != call else ""), font=font(13 * s), fill=MUTED)
     y += 22 * s
-    d.text((x0, y), "%.3f MHz" % info.get("freq", 0), font=font(17 * s, bold=True), fill=INFO)
+    off = 0
+    try:
+        off = int(st.get("off", 0))
+    except ValueError:
+        off = 0
+    d.text((x0, y), "%.3f MHz" % (info.get("freq", 0) + off / 1000.0),
+           font=font(17 * s, bold=True), fill=INFO if abs(off) < 50 else AMBER)
     d.text((x0 + 146 * s, y + 2 * s), "%s kHz   %s %s   GI %s   %s" % (
         info.get("bw", "?"), st.get("mod", "-"), st.get("fec", "-"), st.get("gi", "-"), st.get("fft", "-")),
         font=font(13 * s), fill=TXT2)
@@ -360,10 +366,19 @@ def render_idle(W, H, st, info, presets, message=None, version=""):
     d.text((cx + 50 * s, cy + 70 * s), label, font=font(size * s, bold=True), fill=col, anchor="lm")
     d.text((cx + 50 * s, cy + 150 * s), "P%s  %s" % (info.get("preset", "?"), info.get("name", "")),
            font=font(34 * s, bold=True), fill=TXT)
-    d.text((cx + 50 * s, cy + 205 * s), "%.3f MHz    %s kHz" % (info.get("freq", 0), info.get("bw", "?")),
-           font=font(34 * s), fill=INFO)
+    try:
+        off = int(st.get("off", 0))
+    except ValueError:
+        off = 0
+    d.text((cx + 50 * s, cy + 205 * s), "%.3f MHz    %s kHz" % (info.get("freq", 0) + off / 1000.0,
+           info.get("bw", "?")), font=font(34 * s), fill=INFO if abs(off) < 50 else AMBER)
+    ny = cy + 255 * s
+    if abs(off) >= 50:
+        d.text((cx + 50 * s, cy + 250 * s), "tuned to %.3f - the signal is %+.3f MHz away"
+               % (info.get("freq", 0), off / 1000.0), font=font(22 * s), fill=AMBER)
+        ny = cy + 288 * s
     if st.get("mod", "-") != "-":
-        d.text((cx + 50 * s, cy + 255 * s), "%s %s   GI %s   %s" % (
+        d.text((cx + 50 * s, ny), "%s %s   GI %s   %s" % (
             st.get("mod"), st.get("fec"), st.get("gi"), st.get("fft")), font=font(28 * s), fill=TXT2)
     # meters
     m = margin(st)
@@ -376,7 +391,7 @@ def render_idle(W, H, st, info, presets, message=None, version=""):
         sig = float(st.get("sig", "-999"))
     except ValueError:
         sig = -999
-    y = cy + 320 * s
+    y = cy + (352 if abs(off) >= 50 else 320) * s
     rows = [("Signal", fnum(st, "sig", "%.1f dBm"), (sig + 100) / 60.0 if sig > -200 else 0, INFO),
             ("C/N", fnum(st, "cnr", "%.1f dB"), cn / 35.0 if cn > -100 else 0, mc),
             ("Margin", ("%+.1f dB" % m) if m is not None else "--", (m / 20.0) if m is not None else 0, mc)]

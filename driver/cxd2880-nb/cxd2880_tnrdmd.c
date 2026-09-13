@@ -31,6 +31,16 @@ unsigned int cxd2880_nb_fs_hz;
 module_param_named(nb_fs_hz, cxd2880_nb_fs_hz, uint, 0644);
 MODULE_PARM_DESC(nb_fs_hz, "Override signal sample clock in Hz (0=off)");
 
+/* Carrier offset in kHz, measured by the demodulator once it has locked.
+ * Read-only. A tuner set to a narrow bandwidth will happily pull in a signal
+ * some way off the frequency asked for, so the receiver needs to be able to
+ * show where the signal really is rather than where it was told to look.
+ */
+int cxd2880_nb_offset_khz;
+EXPORT_SYMBOL(cxd2880_nb_offset_khz);
+module_param_named(nb_offset_khz, cxd2880_nb_offset_khz, int, 0444);
+MODULE_PARM_DESC(nb_offset_khz, "Measured carrier offset in kHz (read only)");
+
 int cxd2880_nb_reg4a = -1;
 module_param_named(nb_reg4a, cxd2880_nb_reg4a, int, 0644);
 MODULE_PARM_DESC(nb_reg4a, "Override demod bandwidth code (-1=off)");

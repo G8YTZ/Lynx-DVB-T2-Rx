@@ -364,6 +364,7 @@ int slvt_freeze_reg(struct cxd2880_tnrdmd *tnr_dmd);
 
 /* G8YTZ narrowband experiment overrides */
 extern unsigned int cxd2880_nb_fs_hz;
+extern int cxd2880_nb_offset_khz;
 extern int cxd2880_nb_reg4a;
 extern int cxd2880_nb_if_bw;
 extern int cxd2880_nb_nomi_shift;

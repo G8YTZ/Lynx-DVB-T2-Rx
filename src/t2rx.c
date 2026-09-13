@@ -8,7 +8,7 @@
  * Waits for lock (re-tuning every 10 s), then copies /dev/dvb/adapterN/dvr0
  * to stdout. Exits with status 2 if lock is lost for --loss seconds, so a
  * supervisor can restart the player cleanly. Writes a one-line status file:
- *   state=LOCK sig=-77.6 cnr=28.3 rate=1.10 mod=QPSK fec=1/2 gi=1/8 fft=2K per=0
+ *   state=LOCK sig=-77.6 cnr=28.3 rate=1.10 mod=QPSK fec=1/2 gi=1/8 fft=2K per=0 off=0
  */
 #include <errno.h>
 #include <fcntl.h>
@@ -88,6 +88,19 @@ static void l1(int fe, char* mod, char* fec, char* gi, char* fft)
     case TRANSMISSION_MODE_4K: strcpy(fft, "4K"); break;   case TRANSMISSION_MODE_8K: strcpy(fft, "8K"); break;
     case TRANSMISSION_MODE_16K: strcpy(fft, "16K"); break; case TRANSMISSION_MODE_32K: strcpy(fft, "32K"); break;
     }
+}
+
+/* Carrier offset in kHz, from the patched driver; 0 if it is not available.
+ * A narrowband tuner will pull in a signal well away from the frequency asked
+ * for, so this says where the signal actually is. */
+static int carrier_offset(void)
+{
+    FILE* f = fopen("/sys/module/cxd2880/parameters/nb_offset_khz", "r");
+    int v = 0;
+    if (!f) return 0;
+    if (fscanf(f, "%d", &v) != 1) v = 0;
+    fclose(f);
+    return v;
 }
 
 /* Packet (block) errors since the last call, from the DVBv5 counters; -1 if not available. */
@@ -241,9 +254,9 @@ int main(int argc, char** argv)
                 snprintf(tmp, sizeof tmp, "%s.tmp", statf);
                 FILE* s = fopen(tmp, "w");
                 if (s) {
-                    fprintf(s, "state=%s sig=%.1f cnr=%.1f rate=%.2f mod=%s fec=%s gi=%s fft=%s per=%ld\n",
+                    fprintf(s, "state=%s sig=%.1f cnr=%.1f rate=%.2f mod=%s fec=%s gi=%s fft=%s per=%ld off=%d\n",
                             lk ? "LOCK" : (st & FE_HAS_CARRIER ? "SYNC" : "NOSIG"),
-                            sig, cnr, rate, mod, fec, gi, fft, per);
+                            sig, cnr, rate, mod, fec, gi, fft, per, lk ? carrier_offset() : 0);
                     fclose(s);
                     rename(tmp, statf);          /* atomic for readers */
                 }

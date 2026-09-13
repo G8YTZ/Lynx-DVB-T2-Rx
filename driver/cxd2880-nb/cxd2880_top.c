@@ -1627,6 +1627,16 @@ static int cxd2880_get_frontend_t2(struct dvb_frontend *fe,
 	mutex_lock(priv->spi_mutex);
 	ret = cxd2880_tnrdmd_dvbt2_mon_l1_pre(&priv->tnrdmd, &l1pre);
 	mutex_unlock(priv->spi_mutex);
+
+	{
+		int nb_off = 0;
+
+		mutex_lock(priv->spi_mutex);
+		if (!cxd2880_tnrdmd_dvbt2_mon_carrier_offset(&priv->tnrdmd,
+							     &nb_off))
+			cxd2880_nb_offset_khz = nb_off;
+		mutex_unlock(priv->spi_mutex);
+	}
 	if (!ret) {
 		switch (l1pre.fft_mode) {
 		case CXD2880_DVBT2_M2K:

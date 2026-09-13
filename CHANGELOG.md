@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.17
+* **It now shows the frequency the signal is actually on.** A tuner set to a
+  narrow bandwidth will happily pull in a carrier some way off the frequency it
+  was asked for - a Ryde tuned to 436 locked a transmission on 437, and this
+  receiver does the same - so the display was showing where it had looked rather
+  than where the signal was. The patched driver now exposes the demodulator's
+  measured carrier offset (`nb_offset_khz`), and the OSD shows the true
+  frequency, in amber with a note when it differs from the preset by more than
+  50 kHz. Requires the patched driver; without it nothing changes.
+
 ## 1.9.16
 * **The real cause of the update trouble.** The check meant to run once, a minute
   after boot, was written as a repeating timer - so the receiver asked GitHub

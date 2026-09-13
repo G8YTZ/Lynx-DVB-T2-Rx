@@ -169,6 +169,7 @@ The same commands work locally: `t2rx-ctl tune 437.250 2000`,
 | Symptom | What to do |
 |---|---|
 | A desktop or login prompt instead of the status page | `sudo systemctl set-default multi-user.target` then reboot. The receiver needs the display to itself. |
+| Frequency shown in amber, with "the signal is +1.000 MHz away" | Not a fault: a narrow tuner pulls in carriers well off frequency, and the receiver is telling you where this one really is. Tune to the frequency shown, or ignore it. |
 | NO SIGNAL | Check frequency, bandwidth and antenna. 1350/2000 need the patched driver; the status page warns if it's missing (below). |
 | LOCKED - waiting for picture, and no picture | The video must be **H.264** (a Zero can't decode H.265). Check `grep -E "error|safe" /var/log/t2rx.log`. |
 | Picture but no OSD | The receiver is in safe mode after repeated player errors; the log says why. |
