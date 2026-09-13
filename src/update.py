@@ -154,6 +154,12 @@ def install(tag, log=print, progress=None):
         log("update: no git checkout found - install manually")
         return False
     _allow_dir(d, log)
+    owner = None
+    try:
+        st = os.stat(d)
+        owner = (st.st_uid, st.st_gid)
+    except OSError:
+        pass
     try:
         for args, what in ((["git", "fetch", "--tags", "--force", "--quiet"], "Downloading"),
                            (["git", "checkout", "--quiet", "--force", tag], "Unpacking")):
@@ -170,6 +176,10 @@ def install(tag, log=print, progress=None):
     except (OSError, subprocess.TimeoutExpired) as e:
         log("update: %s" % e)
         return False
+    if owner and owner[0] != 0:
+        # we run as root; leave the checkout owned by whoever it belonged to, or
+        # git refuses to work there as that user afterwards
+        _run(["chown", "-R", "%d:%d" % owner, d], d, timeout=120)
     step("Restarting")
     log("update: installed %s" % tag)
     return True

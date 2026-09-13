@@ -139,8 +139,6 @@ def render_osd(video_w, st, info, mode="full"):
         off = 0
     d.text((x0, y), "%.3f MHz" % (info.get("freq", 0) + off / 1000.0),
            font=font(17 * s, bold=True), fill=INFO if abs(off) < 50 else AMBER)
-    if info.get("lo"):
-        d.text((x0, y + 26 * s), "via converter", font=font(11 * s), fill=MUTED)
     d.text((x0 + 146 * s, y + 2 * s), "%s kHz   %s %s   GI %s   %s" % (
         info.get("bw", "?"), st.get("mod", "-"), st.get("fec", "-"), st.get("gi", "-"), st.get("fft", "-")),
         font=font(13 * s), fill=TXT2)
@@ -378,10 +376,6 @@ def render_idle(W, H, st, info, presets, message=None, version=""):
     if abs(off) >= 50:
         d.text((cx + 50 * s, cy + 250 * s), "tuned to %.3f - the signal is %+.3f MHz away"
                % (info.get("freq", 0), off / 1000.0), font=font(22 * s), fill=AMBER)
-        ny = cy + 288 * s
-    elif info.get("lo"):
-        d.text((cx + 50 * s, cy + 250 * s), "converter LO %.3f MHz - tuner at %.3f"
-               % (info["lo"], abs(info.get("freq", 0) - info["lo"])), font=font(22 * s), fill=MUTED)
         ny = cy + 288 * s
     if st.get("mod", "-") != "-":
         d.text((cx + 50 * s, ny), "%s %s   GI %s   %s" % (

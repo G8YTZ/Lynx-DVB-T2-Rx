@@ -73,6 +73,7 @@ Rendered by the receiver's own code.
 | **1700 kHz** | 1.54 MHz | stock driver | Standard DVB-T2 1.7 MHz. The default. Also received by the Ryde. |
 | **2000 kHz** | 1.90 MHz | patched driver | Most capacity. Also received by the Knucker (Portsdown and Ryde). |
 | **1350 kHz** | 1.28 MHz | patched driver | The narrowest the TV HAT can do. |
+| **5, 6, 7, 8 MHz** | up to 7.6 MHz | stock driver | Full-width channels, as used for amateur DATV in some countries. |
 
 The patched driver (in `driver/`, installed with DKMS so kernel updates rebuild
 it) is only needed for 1350 and 2000. The [Technical Guide](docs/TECHNICAL.md)

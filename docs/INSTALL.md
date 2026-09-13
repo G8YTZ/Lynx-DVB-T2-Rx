@@ -69,7 +69,9 @@ Edit `/etc/t2rx/presets.conf` (up to nine):
     freq = 436.000
     bw = 1700
 
-`freq` is in MHz, `bw` in kHz (1350, 1700 or 2000). Then apply them:
+`freq` is in MHz, `bw` in kHz: 1350, 1700, 2000, or the full-width channels
+5000, 6000, 7000 and 8000. Everything except 1350 and 2000 works with the stock
+driver. Then apply them:
 
     sudo t2rx-ctl reload
 
@@ -179,7 +181,8 @@ The same commands work locally: `t2rx-ctl tune 437.250 2000`,
 | Remote does nothing | Enable CEC on the TV; try another HDMI input; `cec-ctl` should show the Pi. |
 | Black bars above and below on a TV | Re-run `./install.sh` and reboot: it clears any forced HDMI mode so the display chooses. Then set the TV's picture size to "Just Scan" / "Screen Fit" / "1:1" - many letterbox whatever they are sent. |
 | The display chooses badly | Put a mode in `t2rx.conf`, e.g. `hdmi = 1280x720@60`, re-run `./install.sh` and reboot. |
-| Picture squashed or stretched | The stream's shape is wrong, not the display. Set `aspect = 16:9` (or `4:3`) in `t2rx.conf` and `sudo systemctl restart t2rx`. `auto` believes the stream; `stretch` fills the screen regardless. |
+| Picture squashed or stretched | The transmitted frame is not the shape it should be - e.g. 768x400 is 1.92:1, not 16:9. Fix it at the transmitter (768x432 or 800x448 for 16:9); the receiver shows what it is sent. |
+| Picture squashed or stretched | Decided by the transmitting encoder, not here: check its frame size is a true 16:9 (768x432 or 800x448, not 768x400). |
 | Picture slightly too narrow or wide | The monitor reports its size wrongly (common on small Pi displays; TVs are fine). Set `osd_plane = off` and `scale = fix` to correct it, at the cost of more CPU. |
 
 ![Status page warning that the patched driver is missing](images/status_driver_warning.png)
