@@ -181,6 +181,40 @@ def _render_mini(s, st, info):
     return img
 
 
+# ------------------------------------------------------------ preset list
+def render_list(width, presets, cur, title="Presets"):
+    """Compact channel list, drawn over the picture while you step through the
+    presets - the full list only exists on the status page, so without this
+    there is no way to see where you are, or to reach 'Tune...' at the end."""
+    s = max(0.5, width / 800.0)
+    rows = list(presets) + [("tune", {"name": "Tune...", "freq": None, "bw": ""})]
+    rows = rows[:10]
+    rh = 30 * s
+    W, H = int(330 * s), int(rh * len(rows) + 52 * s)
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle([0, 0, W - 1, H - 1], radius=12 * s, fill=BG_PANEL + (225,),
+                        outline=BG_HI + (255,), width=max(1, int(s)))
+    d.rounded_rectangle([0, 0, 5 * s, H - 1], radius=3 * s, fill=ACCENT + (255,))
+    d.text((16 * s, 12 * s), title.upper(), font=font(12 * s, bold=True), fill=MUTED)
+    d.text((W - 16 * s, 12 * s), "\u25b2\u25bc choose   OK watch", font=font(11 * s), fill=FAINT, anchor="rt")
+    y = 40 * s
+    for key, p in rows:
+        on = (str(key) == str(cur))
+        if on:
+            d.rounded_rectangle([12 * s, y - 2 * s, W - 12 * s, y + rh - 6 * s], radius=6 * s,
+                                fill=BG_HI, outline=ACCENT, width=max(1, int(1.5 * s)))
+        d.text((26 * s, y + (rh - 8 * s) / 2), "" if key == "tune" else str(key),
+               font=font(15 * s, bold=True), fill=ACCENT if on else FAINT, anchor="lm")
+        d.text((52 * s, y + (rh - 8 * s) / 2), p.get("name", ""), font=font(14 * s, bold=on),
+               fill=TXT if on else TXT2, anchor="lm")
+        if p.get("freq") is not None:
+            d.text((W - 22 * s, y + (rh - 8 * s) / 2), "%.3f  %s" % (p["freq"], p["bw"]),
+                   font=font(12 * s), fill=MUTED, anchor="rm")
+        y += rh
+    return img
+
+
 # ------------------------------------------------------------- tune panel
 def render_tune(width, t, presets=()):
     """The tuning wizard. t: digits, pos, stage (freq|bw|save), bw, slot, shown.
@@ -366,6 +400,6 @@ def render_idle(W, H, st, info, presets, message=None, version=""):
     # footer
     d.rectangle([0, H - 70 * s, W, H], fill=BG_PANEL)
     d.text((60 * s, H - 35 * s),
-           "Remote:  \u25b2 \u25bc  preset, then Tune...     OK  info     BACK  hide",
+           "Remote:  BACK  preset list     \u25b2 \u25bc  choose, then Tune...     OK  info",
            font=font(24 * s), fill=MUTED, anchor="lm")
     return img

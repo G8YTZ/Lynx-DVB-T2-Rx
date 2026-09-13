@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.14
+* **You can now retune while watching.** The preset list only existed on the
+  status page, so with a picture on screen there was no way to see where you
+  were in it or to reach "Tune...". BACK now brings up a compact preset list over
+  the picture, exactly as it goes back to the channel list on a television;
+  Up/Down move through it, Tune... sits at the end, and BACK again hides it.
+  Stepping presets with the arrows brings the list up too.
+
 ## 1.9.13
 * The display decides the resolution. Any forced HDMI mode is removed at install
   (including the ones 1.9.11 and 1.9.12 could add), so the Pi negotiates with the

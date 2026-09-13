@@ -41,7 +41,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.13"
+VERSION = "t2rx 1.9.14"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -185,6 +185,7 @@ class Receiver:
         self.over_t = None
         self.tune = None             # on-screen tuning entry, see key()
         self.tune_t = 0.0
+        self.list_until = 0.0        # show the preset list over the picture until this time
         self.update_tag = None       # newer release found, shown on the status page
         self.updating = False
         self.update_stage = ""
@@ -654,8 +655,12 @@ class Receiver:
                 continue
             mode, st, info, tune = job
             s = self.plane.w / 800.0
-            img = osd.render_tune(self.plane.w, tune, self.presets) if tune is not None \
-                else osd.render_osd(self.plane.w, st, info, mode)
+            if tune is not None:
+                img = osd.render_tune(self.plane.w, tune, self.presets)
+            elif mode == "list":
+                img = osd.render_list(self.plane.w, self.presets, self.preset)
+            else:
+                img = osd.render_osd(self.plane.w, st, info, mode)
             if not self.video_on or self.last_osd == "off":
                 continue                              # hidden while we were drawing
             if self.plane.show(img, 24 * s, 20 * s) != 0:
@@ -691,18 +696,22 @@ class Receiver:
                     self.osd_el.set_property("alpha", 0.0)
                 self.last_osd = "off"
             return
-        key = self._osd_key(mode) if self.tune is None else ("tune", str(self.tune))
-        interval = float(self.cfg.get("osd_interval", "2"))
+        key = ("list", str(self.preset)) if mode == "list" else (
+            self._osd_key(mode) if self.tune is None else ("tune", str(self.tune)))
+        interval = 0.2 if mode == "list" else float(self.cfg.get("osd_interval", "2"))
         if not force and (key == self.last_osd or now - getattr(self, "_osd_t", 0) < interval):
             return                                   # unchanged, or redrawn too recently
         self.last_osd = key
         self._osd_t = now
+        if time.monotonic() < self.list_until and self.tune is None:
+            mode = "list"
         if self.plane is not None:
             # drawn on a low-priority thread so a redraw can never hold up the audio
             self._osd_job = (mode, dict(self.st), dict(self.info), self.tune and dict(self.tune))
             self._osd_event.set()
             return
-        img = osd.render_osd(self.video_w, self.st, self.info, mode)
+        img = (osd.render_list(self.video_w, self.presets, self.preset) if mode == "list"
+               else osd.render_osd(self.video_w, self.st, self.info, mode))
         data = GLib.Bytes.new(img.tobytes())
         pb = GdkPixbuf.Pixbuf.new_from_bytes(data, GdkPixbuf.Colorspace.RGB, True, 8,
                                              img.width, img.height, img.width * 4)
@@ -879,6 +888,10 @@ class Receiver:
         # Up/Left move up the on-screen list (to a lower preset number), Down/Right
         # move down it. CH+/CH- follow the numbers, as on a TV.
         here = keys.index(self.preset) if self.preset in keys else 0
+        if name in ("down", "right", "ch_up", "up", "left", "ch_down"):
+            # the full preset list is only on the status page, so put a compact
+            # one over the picture while you are moving through it
+            self.list_until = time.monotonic() + 8
         if name in ("down", "right", "ch_up"):
             self.select(keys[(here + 1) % len(keys)])
         elif name in ("up", "left", "ch_down"):
@@ -893,7 +906,14 @@ class Receiver:
             else:
                 self.cycle_osd()
         elif name == "back":
-            self.osd_mode = "off"
+            # BACK brings up the preset list, the way it goes back to the channel
+            # list on a television - and Tune... sits at the end of it. Pressing it
+            # again, with the list already up, hides the display.
+            if time.monotonic() < self.list_until:
+                self.list_until = 0
+                self.osd_mode = "off"
+            else:
+                self.list_until = time.monotonic() + 8
             self.update_osd(force=True)
         return False
 
@@ -910,6 +930,7 @@ class Receiver:
 
     def select(self, n):
         if n == "tune":
+            self.list_until = 0
             self.open_tune()
             return
         if n == self.preset and self.tuner:

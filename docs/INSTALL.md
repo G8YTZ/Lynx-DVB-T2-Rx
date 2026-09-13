@@ -109,6 +109,7 @@ From SSH:
 | Up / Down | move up / down the on-screen preset list |
 | CH+ / CH- | next / previous preset by number |
 | 0-9 | preset by number |
+| BACK | bring up the preset list over the picture (again to hide it) |
 | Down past the last preset | **Tune...** - tune to a new frequency and store it |
 | 0, Red or Menu | the same panel, on remotes that have those keys |
 | OK or Info | OSD: full -> badge -> off (installs a waiting update when there is no picture) |
