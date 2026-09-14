@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.9.26
+* An exception in the player's message handler no longer disappears. GLib
+  swallows anything thrown in a callback, which left the receiver deaf to
+  whatever message came next - including the error it was meant to act on. It is
+  now caught, logged with the last few lines of the traceback, and the receiver
+  carries on. (A 32-bit Pi was reporting "Python int too large to convert to C
+  long" from somewhere in there; this is how we find out where.)
+* Control characters are stripped from the log. Text from git, or a service name
+  in another character set, was making the log a "binary file" as far as grep
+  was concerned.
+
 ## 1.9.25
 * **Software decoding, for streams the hardware will not take.** A Pi's hardware
   decoder handles progressive H.264 up to level 4.0. A repeater fed from

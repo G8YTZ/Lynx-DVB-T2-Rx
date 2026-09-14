@@ -17,6 +17,7 @@ import socket
 import subprocess
 import sys
 import threading
+import traceback
 import time
 
 from PIL import Image  # noqa: E402
@@ -41,7 +42,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.25"
+VERSION = "t2rx 1.9.26"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -61,6 +62,9 @@ STANDARD_BW = (1700, 5000, 6000, 7000, 8000)      # no driver patch needed
 
 
 def log(msg):
+    # strip control characters: text from git, or a DVB service name in another
+    # character set, would otherwise make the log a "binary file" to grep
+    msg = "".join(c if (c.isprintable() or c == " ") else "?" for c in str(msg))
     line = time.strftime("%H:%M:%S ") + msg
     print(line, flush=True)
     try:
@@ -401,6 +405,18 @@ class Receiver:
         return False
 
     def _on_bus(self, bus, msg, gen):
+        """Anything thrown here is swallowed by GLib and leaves the handler deaf
+        to whatever message came next, so catch it and say so instead."""
+        try:
+            self._on_bus_inner(bus, msg, gen)
+        except Exception as e:
+            if not getattr(self, "_bus_warned", False):
+                self._bus_warned = True
+                log("bus handler: %s: %s" % (type(e).__name__, e))
+                for ln in traceback.format_exc().splitlines()[-4:]:
+                    log("   " + ln.strip())
+
+    def _on_bus_inner(self, bus, msg, gen):
         if gen != self.gen:
             return
         t = msg.type
