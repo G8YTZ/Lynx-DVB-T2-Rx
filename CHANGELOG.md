@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.9.34
+* **The audio wow is fixed.** The sound card's clock and the transmitted stream's
+  are never quite identical, and GStreamer's default way of reconciling them is
+  to drop or insert samples periodically ("skew") - which is exactly what wow
+  sounds like on music or a steady tone. The sink now resamples instead,
+  stretching the audio by a fraction of a per cent, which is inaudible.
+  `audio_slave = skew` restores the old behaviour.
+* This had nothing to do with the audio buffer size: measured on air, 40 ms and
+  960 ms sounded the same, which is what pointed at the clock rather than the
+  buffer.
+
 ## 1.9.33
 * **Fix: the web page has done nothing since 1.9.21.** The service-selection
   buttons added then contained a quoting mistake, so the page script failed to

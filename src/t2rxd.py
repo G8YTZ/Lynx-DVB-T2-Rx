@@ -42,7 +42,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.33"
+VERSION = "t2rx 1.9.34"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -100,7 +100,7 @@ def read_conf():
         "osd_interval": "2", "start_buffer_ms": "1500", "max_buffer_ms": "8000",
         "updates": "auto", "web": "on", "web_port": "8080",
         "decoder": "auto", "deinterlace": "auto", "stall_secs": "6",
-        "pacing": "on", "pace_ms": "40",
+        "pacing": "on", "pace_ms": "40", "audio_slave": "resample",
         "cec": "yes", "cec_name": "Lynx DVB-T2 Rx", "cec_active_source": "yes",
         "adapter": "0", "loss_seconds": "5"}})
     c.read(CONF)
@@ -376,8 +376,14 @@ class Receiver:
         audio = self.cfg.get("audio", "none")
         if audio != "none":
             buf = int(float(self.cfg.get("audio_buffer_ms", "1000")) * 1000)     # microseconds
-            asink = ENV("T2RX_ASINK", "alsasink device=%s buffer-time=%d latency-time=%d async=false"
-                        % (audio, buf, max(10000, buf // 10)))
+            # The sound card's clock and the stream's are never quite the same, and
+            # GStreamer's default correction is "skew" - dropping or inserting
+            # samples now and then, which is audible as wow on music or a tone.
+            # "resample" stretches the audio slightly instead, which is not.
+            slave = self.cfg.get("audio_slave", "resample")
+            asink = ENV("T2RX_ASINK",
+                        "alsasink device=%s buffer-time=%d latency-time=%d async=false "
+                        "slave-method=%s" % (audio, buf, max(10000, buf // 10), slave))
             vol = float(self.cfg.get("audio_volume", "0.8"))
             # volume < 1 leaves headroom: AAC decoding can overshoot full scale on
             # peaks, which clips (crackles) when converted to 16-bit
