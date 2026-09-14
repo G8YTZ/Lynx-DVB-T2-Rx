@@ -42,7 +42,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.29"
+VERSION = "t2rx 1.9.30"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -100,6 +100,7 @@ def read_conf():
         "osd_interval": "2", "start_buffer_ms": "1500", "max_buffer_ms": "8000",
         "updates": "auto", "web": "on", "web_port": "8080",
         "decoder": "auto", "deinterlace": "auto", "stall_secs": "6",
+        "pacing": "on", "pace_ms": "200",
         "cec": "yes", "cec_name": "Lynx DVB-T2 Rx", "cec_active_source": "yes",
         "adapter": "0", "loss_seconds": "5"}})
     c.read(CONF)
@@ -354,10 +355,23 @@ class Receiver:
         # A pipe, not a live source: timing comes from the stream's own timestamps,
         # so the T2 demodulator's frame-sized bursts can't disturb the sound (1.3's
         # live UDP feed made the audio resync - gaps then catch-up).
+        #
+        # But the tuner still hands us data in frame-sized bursts, and without
+        # pacing those reach the decoder as clumps: measured on a 25 fps stream,
+        # frames arrived a median 20 ms apart with 79 gaps over 100 ms in 20 s.
+        # tsparse can timestamp its output from the PCR, so the pipeline delivers
+        # at the rate the stream was made: 40.0 ms median, nothing over 53 ms.
         prog = (" program-number=%d" % self.service) if self.service else ""
+        if self.cfg.get("pacing", "on") != "off":
+            pace_us = int(float(self.cfg.get("pace_ms", "200")) * 1000)
+            parse = ("tsparse set-timestamps=true smoothing-latency=%d ! "
+                     "queue max-size-time=%d max-size-bytes=0 max-size-buffers=0 ! "
+                     % (pace_us, 2 * Gst.SECOND))
+        else:
+            parse = "tsparse ! "
         desc = ("fdsrc fd=%d ! queue max-size-bytes=4000000 max-size-time=0 max-size-buffers=0 ! "
-                "tsparse ! tsdemux name=d latency=400%s "
-                "d. ! video/x-h264 ! queue name=vq %s ! h264parse ! %s " % (fd, prog, q, vchain))
+                "%stsdemux name=d latency=400%s "
+                "d. ! video/x-h264 ! queue name=vq %s ! h264parse ! %s " % (fd, parse, prog, q, vchain))
         audio = self.cfg.get("audio", "none")
         if audio != "none":
             buf = int(float(self.cfg.get("audio_buffer_ms", "1000")) * 1000)     # microseconds

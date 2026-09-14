@@ -181,6 +181,7 @@ The same commands work locally: `t2rx-ctl tune 437.250 2000`,
 | Picture but no OSD | The receiver is in safe mode after repeated player errors; the log says why. |
 | No sound | First check the transmission has sound (e.g. on another receiver). Check `audio` in `t2rx.conf`, then test HDMI sound with the receiver stopped: `speaker-test -D hdmi:CARD=vc4hdmi,DEV=0 -c 2 -t sine -l 1`. "Device or resource busy" means something else has the sound device: `sudo fuser -v /dev/snd/*` |
 | Nothing responds - remote or web | The tune panel may be open (it takes every key); press BACK a few times, or wait 90 s for it to close. |
+| Picture hesitant after a scene change | The decoder is being handed bursts. `pacing = on` in `t2rx.conf` (the default) smooths them using the stream's own clock; `pacing = off` if you need the old behaviour. |
 | Picture freezes, signal still locked | The decoder has stalled - common on a Zero decoding 1080. The receiver restarts the player after 6 seconds (`stall_secs`). The real cure is a smaller picture at the transmitting end: 720p decodes far more easily than 1080. |
 | Sound breaks up | Check `t2rx.log` says `OSD on display plane` (if `blended`, the CPU is overloaded). Raise `audio_buffer_ms` (e.g. 400), or `osd_interval`. Distortion only on loud peaks: lower `audio_volume` (e.g. 0.7). |
 | Remote does nothing | Enable CEC on the TV; try another HDMI input; `cec-ctl` should show the Pi. |

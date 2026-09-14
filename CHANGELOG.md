@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.30
+* **The stream is now paced by its own clock.** The tuner hands over data in
+  frame-sized bursts, and until now those went straight to the decoder as
+  clumps - measured on a 25 fps stream, frames arrived a median 20 ms apart with
+  79 gaps longer than 100 ms in 20 seconds. `tsparse` now timestamps its output
+  from the PCR, so the pipeline delivers at the rate the stream was made: 40.0 ms
+  median, nothing over 53 ms. `pacing = off` restores the old behaviour.
+* Two measurement tools added: `tools/framesizes.py` lists every coded picture
+  with its size and type, and `tools/ptsgaps.py` says whether any frames are
+  missing. Both were written to settle whether a transmitter or a receiver was
+  at fault, and both answer that in one command.
+
 ## 1.9.29
 * An update no longer fails if the tuner program happens to be running by hand -
   capturing a stream while an update installs made the binary unwritable ("text
