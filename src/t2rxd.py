@@ -42,7 +42,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.26"
+VERSION = "t2rx 1.9.27"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -81,7 +81,7 @@ def read_conf():
         "osd_plane": "auto", "audio_buffer_ms": "200", "audio_volume": "0.8",
         "osd_interval": "2", "start_buffer_ms": "1500", "max_buffer_ms": "8000",
         "updates": "auto", "web": "on", "web_port": "8080",
-        "decoder": "auto", "deinterlace": "auto",
+        "decoder": "auto", "deinterlace": "auto", "stall_secs": "6",
         "cec": "yes", "cec_name": "Lynx DVB-T2 Rx", "cec_active_source": "yes",
         "adapter": "0", "loss_seconds": "5"}})
     c.read(CONF)
@@ -207,6 +207,8 @@ class Receiver:
         self.update_stage = ""
         self.updating_exit = False
         self.sw_decode = (self.cfg.get("decoder", "auto") == "sw")
+        self.last_frame = 0.0        # when the decoder last produced a frame
+        self.stalls = 0
         self.safe_mode = False       # set if the OSD chain keeps failing: play without it
         self.fails = 0               # player errors since the last picture
 
@@ -364,9 +366,12 @@ class Receiver:
         self.osd_el = self.pipe.get_by_name("osd")
         if self.osd_el:
             self.osd_el.set_property("alpha", 0.0)
+        self.last_frame = time.monotonic()
         probe = self.pipe.get_by_name("vprobe")
         if probe:
-            probe.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, self._first_frame, self.gen)
+            pad = probe.get_static_pad("src")
+            pad.add_probe(Gst.PadProbeType.BUFFER, self._first_frame, self.gen)
+            pad.add_probe(Gst.PadProbeType.BUFFER, self._frame_seen, None)
         bus = self.pipe.get_bus()
         bus.add_signal_watch()
         bus.connect("message", self._on_bus, self.gen)
@@ -377,6 +382,11 @@ class Receiver:
         self.pause_t = 0.0
         self.over_t = None
         self.pipe.set_state(Gst.State.PAUSED)
+
+    def _frame_seen(self, pad, info, _):
+        """Every decoded frame, so a picture that stops can be noticed."""
+        self.last_frame = time.monotonic()
+        return Gst.PadProbeReturn.OK
 
     def _first_frame(self, pad, info, gen):
         caps = pad.get_current_caps()
@@ -393,6 +403,7 @@ class Receiver:
         if gen != self.gen:
             return False
         self.video_on = True
+        self.last_frame = time.monotonic()
         if self.sw_decode and self.cfg.get("decoder", "auto") == "auto":
             log("decoding in software")
         self.fails = 0
@@ -619,6 +630,30 @@ class Receiver:
             self.restart_at = time.monotonic() + 1
         return False
 
+    def _stall_check(self):
+        """A frozen picture looks exactly like a good one from the outside: the
+        signal is locked, the stream is arriving, and the player reports no error
+        - the decoder has simply stopped delivering frames. Restart the player."""
+        if not self.video_on or self.updating or self.tune is not None:
+            return
+        limit = float(self.cfg.get("stall_secs", "6") or 0)
+        if limit <= 0 or not self.last_frame:
+            return
+        if time.monotonic() - self.last_frame < limit:
+            return
+        self.stalls += 1
+        log("picture stopped %.0f s ago with the signal still locked - restarting the player%s"
+            % (time.monotonic() - self.last_frame,
+               " (%d times now)" % self.stalls if self.stalls > 1 else ""))
+        # if it keeps happening, the decoder cannot manage this stream: on a
+        # machine with the cores for it, try software instead
+        if (self.stalls >= 3 and not self.sw_decode
+                and self.cfg.get("decoder", "auto") == "auto" and os.cpu_count() > 2):
+            self.sw_decode = True
+            log("repeated stalls - trying software decoding")
+        self.last_frame = 0.0
+        self._restart_soon(0.5)
+
     def _buffered(self):
         """Seconds of stream waiting to be played (audio if there is sound, else video)."""
         if not self.pipe:
@@ -665,6 +700,7 @@ class Receiver:
             self.start()
             return True
         self.read_status()
+        self._stall_check()
         self._tune_idle_check()
         self._pace()
         self._maybe_install()

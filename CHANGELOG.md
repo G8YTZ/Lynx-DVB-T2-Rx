@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.27
+* **A frozen picture is now noticed.** Until now the receiver could not tell a
+  playing picture from a stopped one: the signal stays locked, the stream keeps
+  arriving and the player reports no error, so nothing happened. It now counts
+  decoded frames, and restarts the player if none arrive for `stall_secs`
+  (6 by default; 0 turns it off). Seen on a Pi Zero decoding 1080 when a scene
+  change produces a large intra frame.
+* After three stalls it will try software decoding, but only on a machine with
+  the cores for it - never on a Zero, where that would make matters worse.
+
 ## 1.9.26
 * An exception in the player's message handler no longer disappears. GLib
   swallows anything thrown in a callback, which left the receiver deaf to

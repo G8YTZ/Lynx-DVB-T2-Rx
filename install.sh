@@ -39,7 +39,7 @@ sudo sed -i 's/^hdmi = \(prefer1080\|1920x1080@60\)$/hdmi = auto/' /etc/t2rx/t2r
 for kv in "audio_buffer_ms = 200" "audio_volume = 0.8" "osd_interval = 2" \
           "start_buffer_ms = 1500" "max_buffer_ms = 8000" "updates = auto" \
           "web = on" "web_port = 8080" "hdmi = auto" "decoder = auto" \
-          "deinterlace = auto"; do
+          "deinterlace = auto" "stall_secs = 6"; do
   grep -q "^${kv%% *}" /etc/t2rx/t2rx.conf || echo "$kv" | sudo tee -a /etc/t2rx/t2rx.conf >/dev/null
 done
 
