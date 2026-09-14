@@ -33,16 +33,19 @@ sudo sed -i 's/^cec_name = G8YTZ T2 Rx$/cec_name = Lynx DVB-T2 Rx/; s/^osd_timeo
 grep -q "^osd_plane" /etc/t2rx/t2rx.conf || echo "osd_plane = auto" | sudo tee -a /etc/t2rx/t2rx.conf >/dev/null
 # strip any hand-added ALSA options from the audio line (buffer is its own setting)
 sudo sed -i 's/^\(audio = [^ ]*\) .*$/\1/' /etc/t2rx/t2rx.conf
-sudo sed -i 's/^audio_buffer_ms = 1000$/audio_buffer_ms = 200/' /etc/t2rx/t2rx.conf
+sudo sed -i 's/^audio_buffer_ms = 1000$/audio_buffer_ms = 100/' /etc/t2rx/t2rx.conf
+# 200 was the default up to 1.9.30; 100 measured better on air
+sudo sed -i 's/^audio_buffer_ms = 200$/audio_buffer_ms = 100/' /etc/t2rx/t2rx.conf
+sudo sed -i 's/^pace_ms = \(200\|100\)$/pace_ms = 40/' /etc/t2rx/t2rx.conf
 # the pixel-shape correction was only ever for monitors that report their size
 # wrongly; on a television it makes the picture too wide, which shows as bars
 sudo sed -i 's/^scale = fix$/scale = kms/' /etc/t2rx/t2rx.conf
 # 1.9.11/1.9.12 could force a mode; the display knows better
 sudo sed -i 's/^hdmi = \(prefer1080\|1920x1080@60\)$/hdmi = auto/' /etc/t2rx/t2rx.conf
-for kv in "audio_buffer_ms = 200" "audio_volume = 0.8" "osd_interval = 2" \
+for kv in "audio_buffer_ms = 100" "audio_volume = 0.8" "osd_interval = 2" \
           "start_buffer_ms = 1500" "max_buffer_ms = 8000" "updates = auto" \
           "web = on" "web_port = 8080" "hdmi = auto" "decoder = auto" \
-          "deinterlace = auto" "stall_secs = 6" "pacing = on" "pace_ms = 200"; do
+          "deinterlace = auto" "stall_secs = 6" "pacing = on" "pace_ms = 40"; do
   grep -q "^${kv%% *}" /etc/t2rx/t2rx.conf || echo "$kv" | sudo tee -a /etc/t2rx/t2rx.conf >/dev/null
 done
 

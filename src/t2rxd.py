@@ -42,7 +42,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.30"
+VERSION = "t2rx 1.9.31"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -96,11 +96,11 @@ def read_conf():
     c = configparser.ConfigParser()
     c.read_dict({"receiver": {
         "audio": "hdmi:CARD=vc4hdmi,DEV=0", "scale": "kms", "osd": "auto", "osd_timeout": "15",
-        "osd_plane": "auto", "audio_buffer_ms": "200", "audio_volume": "0.8",
+        "osd_plane": "auto", "audio_buffer_ms": "100", "audio_volume": "0.8",
         "osd_interval": "2", "start_buffer_ms": "1500", "max_buffer_ms": "8000",
         "updates": "auto", "web": "on", "web_port": "8080",
         "decoder": "auto", "deinterlace": "auto", "stall_secs": "6",
-        "pacing": "on", "pace_ms": "200",
+        "pacing": "on", "pace_ms": "40",
         "cec": "yes", "cec_name": "Lynx DVB-T2 Rx", "cec_active_source": "yes",
         "adapter": "0", "loss_seconds": "5"}})
     c.read(CONF)

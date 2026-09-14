@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.31
+* New defaults, found on air rather than by argument: `pace_ms = 40` and
+  `audio_buffer_ms = 100` (both were 200). 40 ms is one frame period at 25 fps,
+  the natural quantum for this. Larger values of either were tried and were
+  worse: beyond the length of the tuner's burst, more buffering only lengthens
+  the recovery from a disturbance, and a larger sound buffer holds the picture
+  back with it. With these, a scene change into fast-moving material disturbed
+  the picture for about two seconds rather than fifteen, and the audio dropouts
+  went.
+* Untested at low margin: on a weak signal, corrupted PCR values might unsettle
+  a lightly smoothed stream, and `pace_ms = 100` would be the thing to try.
+
 ## 1.9.30
 * **The stream is now paced by its own clock.** The tuner hands over data in
   frame-sized bursts, and until now those went straight to the decoder as
