@@ -30,7 +30,8 @@ small{color:#6b7684}
 <div class=card><div id=presets></div></div>
 <div class=card>
  <div>Tune: <input id=f size=9 placeholder="436.000"> MHz
- <select id=b><option>1350</option><option selected>1700</option><option>2000</option></select> kHz
+ <select id=b><option>1350</option><option selected>1700</option><option>2000</option>
+  <option>5000</option><option>6000</option><option>7000</option><option>8000</option></select> kHz
  <button onclick="go('/tune?freq='+f.value+'&bw='+b.value)">Tune</button></div>
  <div style="margin-top:8px">Store in preset
  <select id=s>1 2 3 4 5 6 7 8 9</select>

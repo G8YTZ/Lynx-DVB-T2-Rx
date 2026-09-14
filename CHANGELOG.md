@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.32
+* Fix: the web page only offered 1350, 1700 and 2000 kHz - the 5, 6, 7 and 8 MHz
+  channels added in 1.9.18 went into the receiver and the on-screen tune panel
+  but never into the browser. All seven are there now.
+* A tune request with a bandwidth the receiver cannot use is refused and logged,
+  rather than accepted and left tuning to nothing.
+* The presets file header now lists all seven bandwidths, and mentions `service`.
+
 ## 1.9.31
 * New defaults, found on air rather than by argument: `pace_ms = 40` and
   `audio_buffer_ms = 100` (both were 200). 40 ms is one frame period at 25 fps,

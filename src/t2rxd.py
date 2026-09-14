@@ -42,7 +42,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.31"
+VERSION = "t2rx 1.9.32"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -134,7 +134,8 @@ def write_presets(presets):
     """Rewrite presets.conf from a list of (key, dict). Written via a temporary
     file so a power cut can't leave it empty."""
     lines = ["# /etc/t2rx/presets.conf - Lynx DVB-T2 Receiver presets (1-9).",
-             "# freq in MHz, bw in kHz: 1350, 1700 or 2000.", ""]
+             "# freq in MHz. bw in kHz: 1350, 1700, 2000, 5000, 6000, 7000 or 8000.",
+             "# service = N picks one programme when a multiplex carries several.", ""]
     for key, p in sorted(presets):
         lines += ["[%d]" % key, "name = %s" % p.get("name", "Preset %d" % key),
                   "freq = %.3f" % p["freq"], "bw = %d" % int(p["bw"])]
@@ -990,6 +991,10 @@ class Receiver:
 
     def tune_to(self, freq, bw, name=None):
         """Tune somewhere not in the presets (shown as preset 0, 'Manual')."""
+        if int(bw) not in BW_TABLE:
+            log("tune: %s kHz is not one of %s - ignoring"
+                % (bw, ", ".join(str(b) for b in BW_CHOICES)))
+            return
         log("tuning %.3f MHz %d kHz" % (float(freq), int(bw)))
         self.presets = [(k, p) for k, p in self.presets if k != 0]
         self.presets.insert(0, (0, {"name": name or "Manual", "freq": float(freq),
