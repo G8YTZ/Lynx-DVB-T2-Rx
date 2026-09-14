@@ -243,7 +243,10 @@ def main():
                         print("              ^ a Pi's hardware decoder does not handle interlaced H.264")
                     elif sps["level_num"] > 40:
                         print("              ^ above level 4.0 - beyond the Pi's hardware decoder")
-                    elif sps["h"] > 1080:
+                    elif sps["h"] == 1088:
+                        print("              (1088 is normal: 1080 rounded up to whole macroblocks,")
+                        print("               with the cropping flag left out. A Pi decodes it fine.)")
+                    elif sps["h"] > 1088:
                         print("              ^ taller than 1080 - beyond the Pi's hardware decoder")
         print()
     print("Choose a service on the receiver with Left/Right, the web page, or")

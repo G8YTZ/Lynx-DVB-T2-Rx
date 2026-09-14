@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.24
+* tsinfo.py: 1088 lines is no longer reported as a problem. H.264 codes in
+  16-line macroblocks, so 1080 becomes 1088 and a cropping flag trims it; some
+  encoders (SR-Systems boards among them) leave the flag out, and every decoder
+  then reports 1088. A Pi decodes it perfectly well.
+
 ## 1.9.23
 * tsinfo.py now reads the H.264 parameters as well as the codec: picture size,
   profile, level, and whether the coding is interlaced. Those are what decide
