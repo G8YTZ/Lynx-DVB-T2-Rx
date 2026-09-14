@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.28
+* The log is now bounded: it trims itself to the most recent entries once it
+  reaches half a megabyte. It had no limit at all, which on a receiver left
+  running for years on an SD card would eventually have mattered.
+
 ## 1.9.27
 * **A frozen picture is now noticed.** Until now the receiver could not tell a
   playing picture from a stopped one: the signal stays locked, the stream keeps

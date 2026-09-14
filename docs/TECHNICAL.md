@@ -367,7 +367,7 @@ actions, ignoring auto-repeat.
 | `/etc/t2rx/presets.conf` | presets 1-9 |
 | `/var/lib/t2rx/state.json` | last preset (restored at boot) |
 | `/run/t2rx.status` | live tuner status (above) |
-| `/var/log/t2rx.log` | log (rotated at 1 MB) |
+| `/var/log/t2rx.log` | log, trimmed to the most recent entries when it reaches 512 kB |
 | `/run/t2rx.sock` | control: `status`, `preset N`, `next`, `prev`, `osd`, `back`, `reload`, `update` (use `t2rx-ctl`) |
 
 The service (`t2rx.service`) waits for the TV HAT, runs as root (the display,

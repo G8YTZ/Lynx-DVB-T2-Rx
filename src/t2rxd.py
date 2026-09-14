@@ -42,7 +42,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.27"
+VERSION = "t2rx 1.9.28"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -51,6 +51,7 @@ STATE = "/var/lib/t2rx/state.json"
 STATUS = "/run/t2rx.status"
 SOCK = "/run/t2rx.sock"
 LOG = "/var/log/t2rx.log"
+LOG_MAX = 512 * 1024          # trim to half this when it is reached
 NB = "/sys/module/cxd2880/parameters"
 # driver override per bandwidth: (nb_fs_hz, nb_if_bw); 1700 = stock driver
 # bandwidth -> (nb_fs_hz, nb_if_bw) driver overrides. 0/-1 means none is needed:
@@ -70,6 +71,23 @@ def log(msg):
     try:
         with open(LOG, "a") as f:
             f.write(line + "\n")
+            # keep the log bounded: this runs for years on an SD card
+            if f.tell() > LOG_MAX:
+                _trim_log()
+    except OSError:
+        pass
+
+
+def _trim_log():
+    """Keep the most recent half and throw the rest away, in one pass."""
+    try:
+        with open(LOG, "rb") as f:
+            f.seek(-LOG_MAX // 2, 2)
+            f.readline()                       # start at a line boundary
+            tail = f.read()
+        with open(LOG + ".tmp", "wb") as f:
+            f.write(b"(earlier entries removed to keep this file small)\n" + tail)
+        os.replace(LOG + ".tmp", LOG)
     except OSError:
         pass
 
