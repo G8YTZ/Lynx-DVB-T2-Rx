@@ -41,6 +41,7 @@ small{color:#6b7684}
 <div class=card><button onclick="go('/osd')">OSD</button>
 <button onclick="go('/prev')">Prev</button><button onclick="go('/next')">Next</button>
 <button onclick="go('/update')">Check for updates</button>
+<div id=svcs style="margin-top:8px"></div>
 <div><small id=ver></small></div></div>
 <script>
 var s=document.getElementById('s');s.innerHTML='';
@@ -65,6 +66,10 @@ function load(){fetch('/status').then(function(r){return r.json()}).then(functio
   p+='<button class="'+(x.key==d.preset?'on':'')+'" onclick="go(\\'/preset/'+x.key+'\\')">'
    +x.key+'  '+x.name+'<br><small>'+x.freq.toFixed(3)+'  '+x.bw+'</small></button>'});
  document.getElementById('presets').innerHTML=p||'<small>no presets</small>';
+ var sv='';(i.services||[]).forEach(function(x){
+  sv+='<button class="'+(x[0]==i.service||((!i.service)&&x===(i.services||[])[0])?'on':'')+
+      '" onclick="go(\'/service?n='+x[0]+'\')">'+(x[1]||('service '+x[0]))+'</button>'});
+ document.getElementById('svcs').innerHTML=(i.services&&i.services.length>1)?('Services in this multiplex: '+sv):'';
  document.getElementById('ver').textContent=d.version+(d.update?('   -   update '+d.update+' available'):'');
 })}
 load();setInterval(load,2000);
@@ -104,7 +109,7 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._send(json.dumps(r.web_cmd("preset", slot=p.rsplit("/", 1)[1])))
             if p in ("/next", "/prev", "/osd", "/back", "/update", "/reload"):
                 return self._send(json.dumps(r.web_cmd(p[1:])))
-            if p in ("/tune", "/save", "/delete"):
+            if p in ("/tune", "/save", "/delete", "/service"):
                 return self._send(json.dumps(r.web_cmd(p[1:], **q)))
             self._send(json.dumps({"error": "unknown"}), code=404)
         except Exception as e:                       # never take the receiver down

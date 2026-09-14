@@ -403,6 +403,21 @@ def render_idle(W, H, st, info, presets, message=None, version=""):
     warn = info.get("warning")
     if warn:
         d.text((cx + 50 * s, cy + ch - 30 * s), warn, font=font(24 * s), fill=AMBER, anchor="lm")
+    svcs = info.get("services") or []
+    if len(svcs) > 1:
+        y2 = cy + ch - 66 * s
+        d.text((cx + 50 * s, y2), "Services here:", font=font(20 * s), fill=MUTED)
+        x2 = cx + 50 * s + 150 * s
+        for sid, nm in svcs[:4]:
+            lab = nm or ("service %d" % sid)
+            on = (sid == info.get("service")) or (not info.get("service") and sid == svcs[0][0])
+            w = d.textlength(lab, font=font(20 * s, bold=on)) + 24 * s
+            d.rounded_rectangle([x2, y2 - 6 * s, x2 + w, y2 + 28 * s], radius=6 * s,
+                                fill=BG_HI if on else BG_PANEL, outline=ACCENT if on else BG_HI, width=2)
+            d.text((x2 + 12 * s, y2), lab, font=font(20 * s, bold=on), fill=ACCENT if on else TXT2)
+            x2 += w + 10 * s
+        d.text((cx + 50 * s, y2 + 34 * s), "\u25c0 \u25b6 to change", font=font(15 * s), fill=MUTED)
+
     upd = info.get("update")
     if upd:
         h = 56 * s

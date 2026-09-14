@@ -41,7 +41,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.20"
+VERSION = "t2rx 1.9.21"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -93,7 +93,8 @@ def read_presets():
             p = c[sec]
             bw = int(p.get("bw", "1700"))
             out.append((key, {"name": p.get("name", "Preset %d" % key), "freq": float(p.get("freq", "436")),
-                              "bw": bw, "plp": int(p.get("plp", "0"))}))
+                              "bw": bw, "plp": int(p.get("plp", "0")),
+                              "service": int(p.get("service", "0"))}))
         except ValueError:
             continue
     out.sort()
@@ -115,6 +116,8 @@ def write_presets(presets):
                   "freq = %.3f" % p["freq"], "bw = %d" % int(p["bw"])]
         if p.get("plp"):
             lines.append("plp = %d" % int(p["plp"]))
+        if p.get("service"):
+            lines.append("service = %d" % int(p["service"]))
         lines.append("")
     try:
         os.makedirs(os.path.dirname(PRESETS), exist_ok=True)
@@ -188,6 +191,9 @@ class Receiver:
         self.playing = False
         self.pause_t = 0.0
         self.over_t = None
+        self.services = []           # [(program number, name)] from the PAT and SDT
+        self._logged_mux = False
+        self.service = 0             # 0 = whichever the multiplex offers first
         self.tune = None             # on-screen tuning entry, see key()
         self.tune_t = 0.0
         self.list_until = 0.0        # show the preset list over the picture until this time
@@ -244,7 +250,11 @@ class Receiver:
         gen = self.gen
         p = self.cur()
         self.set_driver(p["bw"])
+        self.services = []
+        self._logged_mux = False
+        self.service = int(p.get("service", 0) or 0)
         self.info = {"preset": self.preset, "name": p["name"], "freq": p["freq"], "bw": p["bw"],
+                     "service": self.service, "services": [],
                      "callsign": "", "provider": "", "video": "", "audio": "", "warning": self.warning}
         self.st = {"state": "NOSIG"}
         self.video_on = False
@@ -308,9 +318,10 @@ class Receiver:
         # A pipe, not a live source: timing comes from the stream's own timestamps,
         # so the T2 demodulator's frame-sized bursts can't disturb the sound (1.3's
         # live UDP feed made the audio resync - gaps then catch-up).
+        prog = (" program-number=%d" % self.service) if self.service else ""
         desc = ("fdsrc fd=%d ! queue max-size-bytes=4000000 max-size-time=0 max-size-buffers=0 ! "
-                "tsparse ! tsdemux name=d latency=400 "
-                "d. ! video/x-h264 ! queue name=vq %s ! h264parse ! %s " % (fd, q, vchain))
+                "tsparse ! tsdemux name=d latency=400%s "
+                "d. ! video/x-h264 ! queue name=vq %s ! h264parse ! %s " % (fd, prog, q, vchain))
         audio = self.cfg.get("audio", "none")
         if audio != "none":
             buf = int(float(self.cfg.get("audio_buffer_ms", "1000")) * 1000)     # microseconds
@@ -413,24 +424,62 @@ class Receiver:
                 break
 
     def _section(self, msg):
+        """PAT tells us which programmes exist; SDT gives them names. A multiplex
+        may carry several - an Australian repeater sends two on one channel - so we
+        keep the list and let the user choose."""
         try:
             sec = GstMpegts.message_parse_mpegts_section(msg)
         except (TypeError, AttributeError):
             return
-        if not sec or sec.section_type != GstMpegts.SectionType.SDT:
+        if not sec:
+            return
+
+        if sec.section_type == GstMpegts.SectionType.PAT:
+            try:
+                progs = [p.program_number for p in (sec.get_pat() or []) if p.program_number]
+            except (TypeError, AttributeError):
+                return
+            known = {n for n, _ in self.services}
+            for n in progs:
+                if n not in known:
+                    self.services.append((n, ""))
+            self.services.sort()
+            if len(progs) > 1 and not self._logged_mux:
+                self._logged_mux = True
+                log("multiplex carries %d services" % len(progs))
+            self.info["services"] = list(self.services)
+            return
+
+        if sec.section_type != GstMpegts.SectionType.SDT:
             return
         sdt = sec.get_sdt()
+        changed = False
         for svc in sdt.services or []:
+            sid = getattr(svc, "service_id", 0)
             for desc in svc.descriptors or []:
-                if desc.tag == GstMpegts.DVBDescriptorType.SERVICE:
-                    ok, stype, name, provider = desc.parse_dvb_service()
-                    if ok:
-                        if name != self.info.get("callsign") or provider != self.info.get("provider"):
-                            self.info["callsign"] = name or ""
-                            self.info["provider"] = provider or ""
-                            log("service: %s / %s" % (name, provider))
-                            self.update_osd(force=True)
-                        return
+                if desc.tag != GstMpegts.DVBDescriptorType.SERVICE:
+                    continue
+                ok, stype, name, provider = desc.parse_dvb_service()
+                if not ok:
+                    continue
+                for i, (n, old) in enumerate(self.services):
+                    if n == sid and old != (name or ""):
+                        self.services[i] = (sid, name or "")
+                        changed = True
+                if sid not in [n for n, _ in self.services]:
+                    self.services.append((sid, name or ""))
+                    self.services.sort()
+                    changed = True
+                # the one we are actually watching names the station on screen
+                if (self.service and sid == self.service) or (not self.service and not self.info.get("callsign")):
+                    if name != self.info.get("callsign") or provider != self.info.get("provider"):
+                        self.info["callsign"] = name or ""
+                        self.info["provider"] = provider or ""
+                        log("service %d: %s / %s" % (sid, name, provider))
+                        changed = True
+        if changed:
+            self.info["services"] = list(self.services)
+            self.update_osd(force=True)
 
     def _restart_soon(self, secs):
         self._stop_pipeline()
@@ -872,6 +921,28 @@ class Receiver:
             self.start()
         return True
 
+    def select_service(self, sid):
+        """Watch a particular programme in the multiplex, and remember it."""
+        if sid == self.service:
+            return
+        self.service = int(sid)
+        p = self.cur()
+        p["service"] = self.service
+        if self.preset:                       # remember it for next time
+            write_presets([(k, v) for k, v in self.presets if k != 0])
+        names = dict(self.services)
+        log("watching service %s%s" % (self.service or "(first in the multiplex)",
+                                       (" - %s" % names[self.service]) if names.get(self.service) else ""))
+        self.info["callsign"] = names.get(self.service, "")
+        self.start()
+
+    def next_service(self, step=1):
+        ids = [n for n, _ in self.services]
+        if len(ids) < 2:
+            return
+        here = ids.index(self.service) if self.service in ids else 0
+        self.select_service(ids[(here + step) % len(ids)])
+
     def _redraw(self, part=None):
         """Draw the tune panel wherever it will be seen: over the picture if there
         is one, and on the status page as well, so it cannot end up hidden."""
@@ -895,6 +966,9 @@ class Receiver:
         keys = [k for k, _ in self.presets] + ["tune"]
         # Up/Left move up the on-screen list (to a lower preset number), Down/Right
         # move down it. CH+/CH- follow the numbers, as on a TV.
+        if name in ("left", "right") and len(self.services) > 1:
+            self.next_service(1 if name == "right" else -1)    # this multiplex has several
+            return False
         here = keys.index(self.preset) if self.preset in keys else 0
         if name in ("down", "right", "ch_up", "up", "left", "ch_down"):
             # the full preset list is only on the status page, so put a compact
@@ -983,6 +1057,8 @@ class Receiver:
             freq = float(q.get("freq") or self.cur()["freq"])
             bw = int(q.get("bw") or self.cur()["bw"])
             later(self.save_preset, slot, freq, bw, q.get("name") or None)
+        elif cmd == "service":
+            close_then(self.select_service, int(q.get("n", 0)))
         elif cmd == "delete":
             later(self.delete_preset, int(q["slot"]))
         elif cmd == "update":

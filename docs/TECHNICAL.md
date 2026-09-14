@@ -387,6 +387,15 @@ that polls `/status` every 2 s.
 Preset edits rewrite `/etc/t2rx/presets.conf` through a temporary file and
 `os.replace`, so an interrupted write can't leave it empty or half-written.
 
+### 6.5b Several services in one multiplex
+The PAT lists the programmes; the SDT names them. Both are read from `tsparse`
+sections, so the receiver knows what a multiplex carries within a second of
+locking. With no choice made, `tsdemux` takes the first programme - which is
+wrong whenever the first one is not the one you want - so a service can be
+selected (`program-number` on `tsdemux`), and the choice is stored in the preset.
+An Australian repeater sending two programmes on one 7 MHz channel is what
+prompted this.
+
 ### 6.6 Updates
 Checks run once a minute after boot, and hourly after that. (A GLib timer keeps
 repeating while its callback returns True, so the boot check must return False -

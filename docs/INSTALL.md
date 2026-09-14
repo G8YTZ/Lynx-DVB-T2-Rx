@@ -112,6 +112,7 @@ From SSH:
 | CH+ / CH- | next / previous preset by number |
 | 0-9 | preset by number |
 | BACK | bring up the preset list over the picture (again to hide it) |
+| Left / Right | choose between services, when the multiplex carries more than one |
 | Down past the last preset | **Tune...** - tune to a new frequency and store it |
 | 0, Red or Menu | the same panel, on remotes that have those keys |
 | OK or Info | OSD: full -> badge -> off (installs a waiting update when there is no picture) |
@@ -171,6 +172,7 @@ The same commands work locally: `t2rx-ctl tune 437.250 2000`,
 | Symptom | What to do |
 |---|---|
 | A desktop or login prompt instead of the status page | `sudo systemctl set-default multi-user.target` then reboot. The receiver needs the display to itself. |
+| LOCKED but no picture, on a multiplex with several services | The receiver is watching a service with no video. Press Left or Right, or use the web page, to choose another; the choice is saved in the preset. |
 | Frequency shown in amber, with "the signal is +1.000 MHz away" | Not a fault: a narrow tuner pulls in carriers well off frequency, and the receiver is telling you where this one really is. Tune to the frequency shown, or ignore it. |
 | NO SIGNAL | Check frequency, bandwidth and antenna. 1350/2000 need the patched driver; the status page warns if it's missing (below). |
 | LOCKED - waiting for picture, and no picture | The video must be **H.264** (a Zero can't decode H.265). Check `grep -E "error|safe" /var/log/t2rx.log`. |

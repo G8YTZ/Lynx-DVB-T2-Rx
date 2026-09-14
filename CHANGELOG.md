@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.21
+* **More than one service in a multiplex.** A repeater in Australia transmits two
+  programmes on one 7 MHz channel, and the receiver took whichever it found
+  first - so it could sit on "LOCKED - waiting for picture" with a perfectly good
+  signal. It now reads the PAT and SDT, lists what the multiplex carries, and
+  lets you choose: **left and right** on the remote, buttons on the web page, or
+  `service = N` in a preset. The choice is remembered in the preset, and the
+  service names are shown on the status page.
+
 ## 1.9.20
 * Fix: the updater runs as root, and its fetches left root-owned files in the
   checkout - after which git refused to work there as the ordinary user
