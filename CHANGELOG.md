@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.22
+* tools/tsinfo.py: lists the services in a captured multiplex, their names, and
+  the codecs inside each - and says whether a Pi can decode the video. Plain
+  Python, no ffmpeg needed, which matters on a Pi with a small card.
+
 ## 1.9.21
 * **More than one service in a multiplex.** A repeater in Australia transmits two
   programmes on one 7 MHz channel, and the receiver took whichever it found

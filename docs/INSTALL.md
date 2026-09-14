@@ -172,6 +172,7 @@ The same commands work locally: `t2rx-ctl tune 437.250 2000`,
 | Symptom | What to do |
 |---|---|
 | A desktop or login prompt instead of the status page | `sudo systemctl set-default multi-user.target` then reboot. The receiver needs the display to itself. |
+| Not sure what a multiplex contains | Capture 20 seconds and look: `sudo systemctl stop t2rx`, `sudo timeout 20 /opt/t2rx/t2rx -f 445500000 -b 7 -q -G > /tmp/a.ts`, `sudo systemctl start t2rx`, then `python3 ~/Lynx-DVB-T2-Rx/tools/tsinfo.py /tmp/a.ts` |
 | LOCKED but no picture, on a multiplex with several services | The receiver is watching a service with no video. Press Left or Right, or use the web page, to choose another; the choice is saved in the preset. |
 | Frequency shown in amber, with "the signal is +1.000 MHz away" | Not a fault: a narrow tuner pulls in carriers well off frequency, and the receiver is telling you where this one really is. Tune to the frequency shown, or ignore it. |
 | NO SIGNAL | Check frequency, bandwidth and antenna. 1350/2000 need the patched driver; the status page warns if it's missing (below). |
