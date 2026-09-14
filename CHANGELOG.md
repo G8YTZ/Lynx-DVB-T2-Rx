@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.23
+* tsinfo.py now reads the H.264 parameters as well as the codec: picture size,
+  profile, level, and whether the coding is interlaced. Those are what decide
+  whether a Pi's hardware decoder will take it - interlaced H.264 and anything
+  above level 4.0 will not decode, and both look exactly like "LOCKED - waiting
+  for picture" from the outside.
+
 ## 1.9.22
 * tools/tsinfo.py: lists the services in a captured multiplex, their names, and
   the codecs inside each - and says whether a Pi can decode the video. Plain

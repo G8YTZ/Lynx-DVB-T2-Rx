@@ -110,6 +110,112 @@ def parse_sdt(data):
     return names
 
 
+class Bits:
+    """Bit reader with the Exp-Golomb coding H.264 headers use."""
+    def __init__(self, data):
+        self.d, self.p = data, 0
+
+    def u(self, n):
+        v = 0
+        for _ in range(n):
+            byte = self.d[self.p >> 3] if (self.p >> 3) < len(self.d) else 0
+            v = (v << 1) | ((byte >> (7 - (self.p & 7))) & 1)
+            self.p += 1
+        return v
+
+    def ue(self):
+        z = 0
+        while self.u(1) == 0 and z < 32:
+            z += 1
+        return (1 << z) - 1 + self.u(z) if z else 0
+
+    def se(self):
+        k = self.ue()
+        return (k + 1) // 2 if k % 2 else -(k // 2)
+
+
+def parse_sps(nal):
+    """Size, profile, level and whether the picture is interlaced - the three
+    things a Raspberry Pi's hardware decoder actually cares about."""
+    b = Bits(nal)
+    profile = b.u(8)
+    b.u(8)                                        # constraint flags
+    level = b.u(8)
+    b.ue()                                        # sps id
+    if profile in (100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 139, 134, 135):
+        chroma = b.ue()
+        if chroma == 3:
+            b.u(1)
+        b.ue(); b.ue(); b.u(1)
+        if b.u(1):                                # scaling matrices
+            for i in range(8 if chroma != 3 else 12):
+                if b.u(1):
+                    last, nxt, size = 8, 8, 16 if i < 6 else 64
+                    for _ in range(size):
+                        if nxt:
+                            nxt = (last + b.se() + 256) % 256
+                        last = nxt or last
+    b.ue()                                        # log2_max_frame_num
+    poc = b.ue()
+    if poc == 0:
+        b.ue()
+    elif poc == 1:
+        b.u(1); b.se(); b.se()
+        for _ in range(b.ue()):
+            b.se()
+    b.ue(); b.u(1)                                # max_num_ref_frames, gaps flag
+    w = (b.ue() + 1) * 16
+    h_units = b.ue() + 1
+    frame_mbs_only = b.u(1)
+    h = h_units * 16 * (1 if frame_mbs_only else 2)
+    if not frame_mbs_only:
+        b.u(1)                                    # mb_adaptive_frame_field_flag
+    b.u(1)                                        # direct_8x8
+    if b.u(1):                                    # cropping
+        cl, cr, ct, cb = b.ue(), b.ue(), b.ue(), b.ue()
+        w -= (cl + cr) * 2
+        h -= (ct + cb) * 2 * (1 if frame_mbs_only else 2)
+    names = {66: "Baseline", 77: "Main", 88: "Extended", 100: "High",
+             110: "High 10", 122: "High 4:2:2", 244: "High 4:4:4"}
+    return {"w": w, "h": h, "profile": names.get(profile, "profile %d" % profile),
+            "level": "%.1f" % (level / 10.0), "level_num": level,
+            "interlaced": not frame_mbs_only}
+
+
+def find_sps(data, pid):
+    """First SPS on a video PID, unescaped."""
+    payload = b""
+    for i in range(0, len(data) - 187, 188):
+        p = data[i:i + 188]
+        if p[0] != 0x47 or (((p[1] & 0x1f) << 8) | p[2]) != pid:
+            continue
+        off = 4 + ((1 + p[4]) if p[3] & 0x20 else 0)
+        payload += p[off:]
+        if len(payload) > 400000:
+            break
+    j = 0
+    while True:
+        k = payload.find(b"\x00\x00\x01", j)
+        if k < 0:
+            return None
+        nal = payload[k + 3]
+        if (nal & 0x1f) == 7:                     # SPS
+            end = payload.find(b"\x00\x00\x01", k + 3)
+            raw = payload[k + 4:end if end > 0 else k + 300]
+            out, z = bytearray(), 0                # remove emulation prevention
+            for byte in raw:
+                if z >= 2 and byte == 3:
+                    z = 0
+                    continue
+                z = z + 1 if byte == 0 else 0
+                out.append(byte)
+            try:
+                return parse_sps(bytes(out))
+            except Exception:
+                return None
+        j = k + 3
+
+
 def main():
     data = open(sys.argv[1], "rb").read() if len(sys.argv) > 1 else sys.stdin.buffer.read()
     print("%d bytes, %d packets\n" % (len(data), len(data) // 188))
@@ -127,6 +233,18 @@ def main():
             what = STREAM_TYPES.get(t, "type 0x%02x" % t)
             note = PI_CAN_DECODE.get(t)
             print("      PID %-5d %-28s%s" % (epid, what, ("   %s" % note) if note else ""))
+            if t == 0x1b:
+                sps = find_sps(data, epid)
+                if sps:
+                    print("              %dx%d %s, %s profile, level %s" % (
+                        sps["w"], sps["h"], "INTERLACED" if sps["interlaced"] else "progressive",
+                        sps["profile"], sps["level"]))
+                    if sps["interlaced"]:
+                        print("              ^ a Pi's hardware decoder does not handle interlaced H.264")
+                    elif sps["level_num"] > 40:
+                        print("              ^ above level 4.0 - beyond the Pi's hardware decoder")
+                    elif sps["h"] > 1080:
+                        print("              ^ taller than 1080 - beyond the Pi's hardware decoder")
         print()
     print("Choose a service on the receiver with Left/Right, the web page, or")
     print("service = N in /etc/t2rx/presets.conf")
