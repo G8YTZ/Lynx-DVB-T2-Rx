@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.29
+* An update no longer fails if the tuner program happens to be running by hand -
+  capturing a stream while an update installs made the binary unwritable ("text
+  file busy"), and the update gave up. The installer now stops it first.
+* When an install does fail, the log says why: it picks out the lines that look
+  like a complaint rather than printing the tail of apt's output.
+
 ## 1.9.28
 * The log is now bounded: it trims itself to the most recent entries once it
   reaches half a megabyte. It had no limit at all, which on a receiver left

@@ -171,7 +171,13 @@ def install(tag, log=print, progress=None):
         step("Installing - this takes a minute")
         r = _run(["./install.sh", "--no-boot"], d, timeout=1800)
         if r.returncode:
-            log("update: install.sh failed: %s" % (r.stderr or r.stdout or "").strip()[-200:])
+            # the last lines that look like a complaint, rather than the tail of
+            # whatever apt happened to be saying at the time
+            lines = [ln for ln in ((r.stderr or "") + "\n" + (r.stdout or "")).splitlines()
+                     if any(w in ln.lower() for w in
+                            ("error", "cannot", "failed", "no such", "busy", "denied", "not found"))]
+            why = " | ".join(lines[-2:]) if lines else (r.stderr or r.stdout or "").strip()[-160:]
+            log("update: install.sh failed (%d): %s" % (r.returncode, why))
             return False
     except (OSError, subprocess.TimeoutExpired) as e:
         log("update: %s" % e)

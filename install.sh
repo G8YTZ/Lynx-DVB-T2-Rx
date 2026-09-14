@@ -17,6 +17,9 @@ sudo apt-get install -y --no-install-recommends gcc libc6-dev v4l-utils dvb-tool
 
 echo "== Program -> /opt/t2rx"
 sudo mkdir -p /opt/t2rx /etc/t2rx /var/lib/t2rx
+# a running tuner program makes its own file unwritable ("text file busy"), which
+# happens if someone is capturing a stream by hand while an update installs
+sudo pkill -x t2rx 2>/dev/null && sleep 1
 gcc -O2 -Wall -o src/t2rx src/t2rx.c
 sudo install -m 755 src/t2rx src/t2rxd.py /opt/t2rx/
 sudo install -m 644 src/osd.py src/fb.py src/cec.py src/osdplane.py src/update.py src/web.py /opt/t2rx/
