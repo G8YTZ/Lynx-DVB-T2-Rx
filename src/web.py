@@ -46,7 +46,6 @@ small{color:#6b7684}
 <div id=svcs style="margin-top:8px"></div>
 <div><small id=ver></small></div></div>
 <script>
-var s=document.getElementById('s');s.innerHTML='';
 
 function go(u){fetch(u).then(function(){setTimeout(load,400)})}
 function load(){fetch('/status').then(function(r){return r.json()}).then(function(d){

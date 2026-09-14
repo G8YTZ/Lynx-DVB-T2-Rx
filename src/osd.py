@@ -233,7 +233,8 @@ def render_tune(width, t, presets=()):
                         outline=ACCENT + (255,), width=max(2, int(2 * s)))
     x0, y = 18 * s, 12 * s
     stage = t.get("stage", "freq")
-    titles = {"freq": "Tune - frequency", "bw": "Tune - bandwidth", "save": "Store this channel?"}
+    titles = {"freq": "Tune - frequency", "bw": "Tune - bandwidth",
+              "save": "Delete a preset?" if t.get("action") == "delete" else "Store this channel?"}
     d.text((x0, y), titles[stage], font=font(16 * s, bold=True), fill=TXT)
     y += 28 * s
 
@@ -269,21 +270,24 @@ def render_tune(width, t, presets=()):
 
     if stage == "save":
         slot = t.get("slot", 0)
-        d.text((x0, y), "Preset", font=font(15 * s), fill=MUTED)
+        delete = t.get("action") == "delete"
+        d.text((x0, y), "Delete" if delete else "Preset",
+               font=font(15 * s, bold=delete), fill=RED if delete else MUTED)
         xx = x0 + 62 * s
         for n in range(0, 10):
             on = (n == slot)
             lab = "no" if n == 0 else str(n)
             fb = font(15 * s, bold=on)
             w = max(d.textlength(lab, font=fb) + 12 * s, 26 * s)
+            live = RED if (on and delete) else ACCENT
             d.rounded_rectangle([xx, y - 4 * s, xx + w, y + 20 * s], radius=6 * s,
                                 fill=BG_HI if on else BG_RAISED,
-                                outline=ACCENT if on else BG_HI, width=2 if on else 1)
-            d.text((xx + w / 2, y + 8 * s), lab, font=fb, fill=ACCENT if on else MUTED, anchor="mm")
+                                outline=live if on else BG_HI, width=2 if on else 1)
+            d.text((xx + w / 2, y + 8 * s), lab, font=fb, fill=live if on else MUTED, anchor="mm")
             xx += w + 4 * s
         y += 32 * s
-        d.text((x0, y), "\u25b2\u25bc choose     OK confirm     BACK cancel",
-               font=font(14 * s), fill=TXT2)
+        d.text((x0, y), "\u25b2\u25bc preset   \u25c0\u25b6 %s   OK confirm   BACK cancel"
+               % ("store" if delete else "delete"), font=font(14 * s), fill=TXT2)
         return img
 
     if stage == "freq":

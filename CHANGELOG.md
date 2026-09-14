@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.38
+* **Fix: the preset menu on the web page was emptied as the page loaded.** A
+  leftover line from the old code cleared it before it could be used, so there
+  was nothing to store or delete against. The options are in the page and now
+  stay there.
+* **A preset can be deleted from the armchair.** In the Tune panel's last stage,
+  Left and Right switch between storing and deleting; the panel says which, and
+  turns red when it is about to delete. Previously this was only possible from
+  the web page.
+
 ## 1.9.36
 * 2000 kHz is no longer offered in the tune panel or on the web page. The tuner
   has no IF filter between 1.7 and 5 MHz: through the 5 MHz filter a 2 MHz signal

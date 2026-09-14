@@ -42,7 +42,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.36"
+VERSION = "t2rx 1.9.38"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -996,16 +996,23 @@ class Receiver:
             self._tune_refresh()
             return
 
-        # stage "save": 0 = don't store, 1-9 = that preset
-        if up or name == "right":
+        # stage "save": 0 = don't store, 1-9 = that preset. Up and Down choose the
+        # slot; Left and Right switch between storing and deleting it, so a preset
+        # can be cleared from the armchair as well as from the web page.
+        if up:
             t["slot"] = (t["slot"] + 1) % 10
-        elif down or name == "left":
+        elif down:
             t["slot"] = (t["slot"] - 1) % 10
+        elif name in ("left", "right"):
+            t["action"] = "delete" if t.get("action", "save") == "save" else "save"
         elif name.isdigit():
             t["slot"] = int(name)
         elif ok:
             if t["slot"]:
-                self.save_preset(t["slot"], t["freq"], t["bw"])
+                if t.get("action", "save") == "delete":
+                    self.delete_preset(t["slot"])
+                else:
+                    self.save_preset(t["slot"], t["freq"], t["bw"])
             self.close_tune()
             return
         self._tune_refresh()

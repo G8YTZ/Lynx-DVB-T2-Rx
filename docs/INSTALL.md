@@ -112,6 +112,7 @@ From SSH:
 | CH+ / CH- | next / previous preset by number |
 | 0-9 | preset by number |
 | BACK | bring up the preset list over the picture (again to hide it) |
+| Left / Right in Tune | switch between storing and deleting the chosen preset |
 | Left / Right | choose between services, when the multiplex carries more than one |
 | Down past the last preset | **Tune...** - tune to a new frequency and store it |
 | 0, Red or Menu | the same panel, on remotes that have those keys |
