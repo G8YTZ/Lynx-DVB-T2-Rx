@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.9.33
+* **Fix: the web page has done nothing since 1.9.21.** The service-selection
+  buttons added then contained a quoting mistake, so the page script failed to
+  parse - the page still served and looked right, but nothing dynamic worked: no
+  state, no presets, no service list, and the buttons did nothing. It reached
+  receivers at different times depending on when they updated, which is why it
+  looked like a new fault. The buttons are now built with DOM calls rather than
+  quotes inside quotes inside quotes, so the mistake cannot recur.
+* Fix: the "store in preset" menu was empty - the script that filled it never
+  ran, for the same reason. Its options are in the page now.
+* tools/checkweb.py checks that the page script parses, so a broken one cannot
+  ship again. That it could was the real fault here: nothing failed, it just
+  quietly did nothing.
+
 ## 1.9.32
 * Fix: the web page only offered 1350, 1700 and 2000 kHz - the 5, 6, 7 and 8 MHz
   channels added in 1.9.18 went into the receiver and the on-screen tune panel

@@ -34,7 +34,8 @@ small{color:#6b7684}
   <option>5000</option><option>6000</option><option>7000</option><option>8000</option></select> kHz
  <button onclick="go('/tune?freq='+f.value+'&bw='+b.value)">Tune</button></div>
  <div style="margin-top:8px">Store in preset
- <select id=s>1 2 3 4 5 6 7 8 9</select>
+ <select id=s><option>1</option><option>2</option><option>3</option><option>4</option>
+  <option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select>
  <input id=n size=14 placeholder="name (optional)">
  <button onclick="go('/save?slot='+s.value+'&freq='+f.value+'&bw='+b.value+'&name='+encodeURIComponent(n.value))">Save</button>
  <button onclick="if(confirm('Delete preset '+s.value+'?'))go('/delete?slot='+s.value)">Delete</button></div>
@@ -46,7 +47,7 @@ small{color:#6b7684}
 <div><small id=ver></small></div></div>
 <script>
 var s=document.getElementById('s');s.innerHTML='';
-for(var i=1;i<10;i++){var o=document.createElement('option');o.text=i;s.add(o)}
+
 function go(u){fetch(u).then(function(){setTimeout(load,400)})}
 function load(){fetch('/status').then(function(r){return r.json()}).then(function(d){
  var t=d.tuner||{},i=d.info||{};
@@ -63,14 +64,21 @@ function load(){fetch('/status').then(function(r){return r.json()}).then(functio
  row('TS rate',(t.rate||'--')+' Mb/s');
  if(i.video)row('Video',i.video);if(i.audio)row('Audio',i.audio);
  document.getElementById('info').innerHTML=h;
- var p='';(d.presets||[]).forEach(function(x){
-  p+='<button class="'+(x.key==d.preset?'on':'')+'" onclick="go(\\'/preset/'+x.key+'\\')">'
-   +x.key+'  '+x.name+'<br><small>'+x.freq.toFixed(3)+'  '+x.bw+'</small></button>'});
- document.getElementById('presets').innerHTML=p||'<small>no presets</small>';
- var sv='';(i.services||[]).forEach(function(x){
-  sv+='<button class="'+(x[0]==i.service||((!i.service)&&x===(i.services||[])[0])?'on':'')+
-      '" onclick="go(\'/service?n='+x[0]+'\')">'+(x[1]||('service '+x[0]))+'</button>'});
- document.getElementById('svcs').innerHTML=(i.services&&i.services.length>1)?('Services in this multiplex: '+sv):'';
+ var pel=document.getElementById('presets');pel.innerHTML='';
+ (d.presets||[]).forEach(function(x){
+   var b=document.createElement('button');
+   if(x.key==d.preset)b.className='on';
+   b.innerHTML=x.key+'  '+x.name+'<br><small>'+x.freq.toFixed(3)+'  '+x.bw+'</small>';
+   b.onclick=function(){go('/preset/'+x.key)};pel.appendChild(b)});
+ if(!(d.presets||[]).length)pel.innerHTML='<small>no presets</small>';
+ var sel=document.getElementById('svcs');sel.innerHTML='';
+ if((i.services||[]).length>1){
+   sel.appendChild(document.createTextNode('Services in this multiplex: '));
+   i.services.forEach(function(x){
+     var b=document.createElement('button');
+     if(x[0]==i.service||(!i.service&&x[0]==i.services[0][0]))b.className='on';
+     b.textContent=x[1]||('service '+x[0]);
+     b.onclick=function(){go('/service?n='+x[0])};sel.appendChild(b)})};
  document.getElementById('ver').textContent=d.version+(d.update?('   -   update '+d.update+' available'):'');
 })}
 load();setInterval(load,2000);
