@@ -72,8 +72,11 @@ Rendered by the receiver's own code.
 |---|---|---|---|
 | **1700 kHz** | 1.54 MHz | stock driver | Standard DVB-T2 1.7 MHz. The default. Also received by the Ryde. |
 | **2000 kHz** | 1.90 MHz | patched driver | Most capacity. Also received by the Knucker (Portsdown and Ryde). |
-| **1350 kHz** | 1.28 MHz | patched driver | The narrowest the TV HAT can do. |
+| **1350 kHz** | 1.28 MHz | patched driver | The narrowest the TV HAT can do; measured 40 dB C/N. |
 | **5, 6, 7, 8 MHz** | up to 7.6 MHz | stock driver | Full-width channels, as used for amateur DATV in some countries. |
+
+2000 kHz is supported but not offered in the menus: the tuner has no IF filter
+between 1.7 and 5 MHz, and neither neighbouring filter suits a 2 MHz signal.
 
 Interlaced H.264, or anything above level 4.0, is beyond the Pi's hardware
 decoder; on a Pi 4 or 5 the receiver falls back to decoding in software.

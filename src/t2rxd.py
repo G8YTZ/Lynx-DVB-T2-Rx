@@ -42,7 +42,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.34"
+VERSION = "t2rx 1.9.36"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -118,7 +118,8 @@ def read_presets():
             bw = int(p.get("bw", "1700"))
             out.append((key, {"name": p.get("name", "Preset %d" % key), "freq": float(p.get("freq", "436")),
                               "bw": bw, "plp": int(p.get("plp", "0")),
-                              "service": int(p.get("service", "0"))}))
+                              "service": int(p.get("service", "0")),
+                              "if_bw": p.get("if_bw", "")}))
         except ValueError:
             continue
     out.sort()
@@ -127,7 +128,11 @@ def read_presets():
     return out
 
 
-BW_CHOICES = (1350, 1700, 2000, 5000, 6000, 7000, 8000)
+# 2000 is deliberately not offered: the tuner has no IF filter between 1.7 and
+# 5 MHz, so a 2 MHz signal either collects the 5 MHz filter's noise (measured
+# 10 dB worse than 1350 on the same path) or has its edges clipped by the 1.7 MHz
+# one (30 dB, and flakey). It still works if a preset asks for it by name.
+BW_CHOICES = (1350, 1700, 5000, 6000, 7000, 8000)
 
 
 def write_presets(presets):
@@ -143,6 +148,8 @@ def write_presets(presets):
             lines.append("plp = %d" % int(p["plp"]))
         if p.get("service"):
             lines.append("service = %d" % int(p["service"]))
+        if str(p.get("if_bw", "")) != "":
+            lines.append("if_bw = %s" % p["if_bw"])
         lines.append("")
     try:
         os.makedirs(os.path.dirname(PRESETS), exist_ok=True)
@@ -255,8 +262,16 @@ class Receiver:
         return dict(self.presets)[self.preset]
 
     # ------------------------------------------------------------ driver
-    def set_driver(self, bw):
+    def set_driver(self, bw, if_bw=None):
+        """The tuner's IF filter has no setting between 1.7 and 5 MHz, so a 2 MHz
+        signal is either passed through the 5 MHz filter - admitting far more
+        noise than it needs - or through the 1.7 MHz one, which clips its edges.
+        Measured on air, 1350 (1.7 MHz filter) gave 10 dB better C/N than 2000
+        (5 MHz filter), so a preset can say which to use: if_bw = 3 forces the
+        1.7 MHz filter, 0 the 5/6 MHz one, 1 = 7 MHz, 2 = 8 MHz."""
         fs, ifb = BW_TABLE.get(bw, (0, -1))
+        if if_bw is not None and str(if_bw) != "":
+            ifb = int(if_bw)
         self.warning = None
         if not os.path.exists(NB + "/nb_fs_hz"):
             if bw not in STANDARD_BW:
@@ -277,7 +292,7 @@ class Receiver:
         self.gen += 1
         gen = self.gen
         p = self.cur()
-        self.set_driver(p["bw"])
+        self.set_driver(p["bw"], p.get("if_bw"))
         self.services = []
         self._logged_mux = False
         self.service = int(p.get("service", 0) or 0)

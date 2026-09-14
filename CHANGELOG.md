@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.9.36
+* 2000 kHz is no longer offered in the tune panel or on the web page. The tuner
+  has no IF filter between 1.7 and 5 MHz: through the 5 MHz filter a 2 MHz signal
+  measured 10 dB worse C/N than 1350 on the same path, and through the 1.7 MHz
+  one (`if_bw = 3`) it managed 30 dB but locked flakily with its outer carriers
+  clipped. Neither is good enough to recommend. It is still tuned if a preset
+  asks for it by name, for anyone who wants to experiment.
+* **Use 1700 where you can** - it is the native mode, needs no driver patch, and
+  performs properly. 1350 is a close second at 40 dB C/N.
+
+## 1.9.35
+* A preset can now choose the tuner's IF filter (`if_bw`). The chip has nothing
+  between 1.7 and 5 MHz, so a 2 MHz signal either goes through the 5 MHz filter
+  and collects far more noise than it needs, or through the 1.7 MHz one and has
+  its edges clipped. Measured on air, 1350 kHz (1.7 MHz filter) gave 40 dB C/N
+  where 2000 kHz (5 MHz filter) was 10 dB worse on the same path - so this is
+  worth experimenting with rather than assuming. `if_bw = 3` selects 1.7 MHz.
+
 ## 1.9.34
 * **The audio wow is fixed.** The sound card's clock and the transmitted stream's
   are never quite identical, and GStreamer's default way of reconciling them is
