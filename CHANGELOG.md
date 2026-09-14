@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.25
+* **Software decoding, for streams the hardware will not take.** A Pi's hardware
+  decoder handles progressive H.264 up to level 4.0. A repeater fed from
+  broadcast equipment may send 1080i, or 1080p50 at level 4.2 - VK3RTV in
+  Australia sends one of each - and neither decodes, which looks exactly like
+  "LOCKED - waiting for picture". The receiver now falls back to software after
+  two failures (`decoder = auto`), deinterlacing as it goes, and says so in the
+  log. `decoder = sw` forces it, `hw` prevents it.
+* This needs a Pi 4 or 5 for HD: a Zero or a Pi 3 has not the cores for 1080
+  software decoding. It does, though, mean a Pi 5 can now be used - it has no
+  hardware H.264 decoder at all.
+
 ## 1.9.24
 * tsinfo.py: 1088 lines is no longer reported as a problem. H.264 codes in
   16-line macroblocks, so 1080 becomes 1088 and a cropping flag trims it; some

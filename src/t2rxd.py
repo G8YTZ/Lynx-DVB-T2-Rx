@@ -41,7 +41,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.24"
+VERSION = "t2rx 1.9.25"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -77,6 +77,7 @@ def read_conf():
         "osd_plane": "auto", "audio_buffer_ms": "200", "audio_volume": "0.8",
         "osd_interval": "2", "start_buffer_ms": "1500", "max_buffer_ms": "8000",
         "updates": "auto", "web": "on", "web_port": "8080",
+        "decoder": "auto", "deinterlace": "auto",
         "cec": "yes", "cec_name": "Lynx DVB-T2 Rx", "cec_active_source": "yes",
         "adapter": "0", "loss_seconds": "5"}})
     c.read(CONF)
@@ -201,6 +202,7 @@ class Receiver:
         self.updating = False
         self.update_stage = ""
         self.updating_exit = False
+        self.sw_decode = (self.cfg.get("decoder", "auto") == "sw")
         self.safe_mode = False       # set if the OSD chain keeps failing: play without it
         self.fails = 0               # player errors since the last picture
 
@@ -296,7 +298,17 @@ class Receiver:
         # the stream back until the first keyframe (tsgate.h).
         q = "max-size-time=0 max-size-buffers=0 max-size-bytes=20000000"
         vsink = ENV("T2RX_VSINK", "kmssink name=vsink")
-        dec = ENV("T2RX_DECODER", "v4l2h264dec")
+        # The Pi's hardware decoder handles progressive H.264 up to level 4.0. A
+        # broadcast-fed repeater may send 1080i, or 1080p50 at level 4.2, and
+        # neither will decode - so a bigger Pi can be told to do it in software.
+        want = self.cfg.get("decoder", "auto")
+        sw = "avdec_h264 max-threads=4"
+        if want == "sw" or (want == "auto" and self.sw_decode):
+            dec = ENV("T2RX_DECODER", sw)
+            if self.cfg.get("deinterlace", "auto") != "off":
+                dec += " ! deinterlace method=linear"
+        else:
+            dec = ENV("T2RX_DECODER", "v4l2h264dec")
         if self.plane is not None:
             # zero-copy: decoder DMABuf frames straight to the video plane; the OSD
             # is on a separate plane mixed by the display hardware
@@ -377,6 +389,8 @@ class Receiver:
         if gen != self.gen:
             return False
         self.video_on = True
+        if self.sw_decode and self.cfg.get("decoder", "auto") == "auto":
+            log("decoding in software")
         self.fails = 0
         self.info["video"] = vinfo + ("  (safe mode, no OSD)" if self.safe_mode else "")
         log("picture: %s" % vinfo)
@@ -395,7 +409,13 @@ class Receiver:
             log("player error: %s | %s" % (err.message, " ".join((dbg or "").split())[:300]))
             if not self.video_on and self.st.get("state") == "LOCK":
                 self.fails += 1
-                if self.fails >= 3 and not self.safe_mode:
+                # the hardware decoder refuses interlaced H.264 and anything above
+                # level 4.0; on a Pi with cores to spare, try software instead
+                if (self.fails == 2 and not self.sw_decode
+                        and self.cfg.get("decoder", "auto") == "auto" and os.cpu_count() > 1):
+                    self.sw_decode = True
+                    log("hardware decoder will not take this stream - trying software")
+                elif self.fails >= 3 and not self.safe_mode:
                     self.safe_mode = True
                     log("player failed %d times with the OSD chain - playing without OSD (safe mode)" % self.fails)
             self._restart_soon(3)

@@ -75,6 +75,9 @@ Rendered by the receiver's own code.
 | **1350 kHz** | 1.28 MHz | patched driver | The narrowest the TV HAT can do. |
 | **5, 6, 7, 8 MHz** | up to 7.6 MHz | stock driver | Full-width channels, as used for amateur DATV in some countries. |
 
+Interlaced H.264, or anything above level 4.0, is beyond the Pi's hardware
+decoder; on a Pi 4 or 5 the receiver falls back to decoding in software.
+
 The patched driver (in `driver/`, installed with DKMS so kernel updates rebuild
 it) is only needed for 1350 and 2000. The [Technical Guide](docs/TECHNICAL.md)
 explains why DVB-T2 only, why these three bandwidths, and how the TV HAT was
