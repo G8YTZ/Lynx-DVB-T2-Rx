@@ -42,7 +42,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.38"
+VERSION = "t2rx 1.9.40"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -101,6 +101,7 @@ def read_conf():
         "updates": "auto", "web": "on", "web_port": "8080",
         "decoder": "auto", "deinterlace": "auto", "stall_secs": "6",
         "pacing": "on", "pace_ms": "40", "audio_slave": "resample",
+        "no_picture_secs": "20",
         "cec": "yes", "cec_name": "Lynx DVB-T2 Rx", "cec_active_source": "yes",
         "adapter": "0", "loss_seconds": "5"}})
     c.read(CONF)
@@ -236,6 +237,8 @@ class Receiver:
         self.sw_decode = (self.cfg.get("decoder", "auto") == "sw")
         self.last_frame = 0.0        # when the decoder last produced a frame
         self.stalls = 0
+        self.locked_at = 0.0         # when the tuner last reported lock
+        self.no_picture = 0
         self.safe_mode = False       # set if the OSD chain keeps failing: play without it
         self.fails = 0               # player errors since the last picture
 
@@ -457,6 +460,7 @@ class Receiver:
         if gen != self.gen:
             return False
         self.video_on = True
+        self.no_picture = 0
         self.last_frame = time.monotonic()
         if self.sw_decode and self.cfg.get("decoder", "auto") == "auto":
             log("decoding in software")
@@ -617,12 +621,19 @@ class Receiver:
 
     # ------------------------------------------------------------ status / OSD
     def read_status(self):
+        was = self.st.get("state")
         try:
             with open(STATUS) as f:
                 line = f.read().strip()
             self.st = dict(kv.split("=", 1) for kv in line.split() if "=" in kv)
         except OSError:
             pass
+        now = self.st.get("state")
+        if now == "LOCK" and was != "LOCK":
+            self.locked_at = time.monotonic()        # for the no-picture watchdog
+            self.no_picture = 0
+        elif now != "LOCK":
+            self.locked_at = 0.0
 
     # ------------------------------------------------------------ updates
     def check_updates(self, repeat=True):
@@ -688,7 +699,10 @@ class Receiver:
         """A frozen picture looks exactly like a good one from the outside: the
         signal is locked, the stream is arriving, and the player reports no error
         - the decoder has simply stopped delivering frames. Restart the player."""
-        if not self.video_on or self.updating or self.tune is not None:
+        if self.updating or self.tune is not None:
+            return
+        if not self.video_on:
+            self._no_picture_check()
             return
         limit = float(self.cfg.get("stall_secs", "6") or 0)
         if limit <= 0 or not self.last_frame:
@@ -706,6 +720,29 @@ class Receiver:
             self.sw_decode = True
             log("repeated stalls - trying software decoding")
         self.last_frame = 0.0
+        self._restart_soon(0.5)
+
+    def _no_picture_check(self):
+        """Locked, but nothing has ever been decoded. Reported from Australia: the
+        receiver sat on "waiting for picture" indefinitely after being restarted
+        mid-transmission, and only recovered when the transmitting station stopped
+        and started again - which made the repeater send fresh tables. Restarting
+        the player achieves the same thing without troubling anybody."""
+        limit = float(self.cfg.get("no_picture_secs", "20") or 0)
+        if limit <= 0 or self.st.get("state") != "LOCK" or not self.locked_at:
+            return
+        if time.monotonic() - self.locked_at < limit:
+            return
+        self.no_picture += 1
+        self.locked_at = time.monotonic()
+        # a multiplex often carries a service with no video in it; if restarting
+        # twice has not helped, try the next one before giving up on this pass
+        if self.no_picture >= 3 and len(self.services) > 1:
+            log("locked for %.0f s with no picture - trying the next service" % limit)
+            self.no_picture = 0
+            self.next_service(1)
+            return
+        log("locked for %.0f s with no picture - restarting the player" % limit)
         self._restart_soon(0.5)
 
     def _buffered(self):

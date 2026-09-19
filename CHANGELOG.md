@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.9.40
+* **"LOCKED - waiting for picture" no longer lasts for ever.** The stall watchdog
+  added in 1.9.27 only noticed a picture that stopped, not one that never
+  started - so a receiver restarted in the middle of a transmission could sit
+  there indefinitely, as VK3IE found in Australia. His workaround was to stop and
+  restart his own transmission, which made the repeater send fresh tables. The
+  receiver now does the equivalent itself: if it has been locked for
+  `no_picture_secs` (20 by default) with nothing decoded, it restarts the player,
+  and after three attempts it tries the next service in the multiplex.
+
+## 1.9.39
+* **Correction: a Pi does decode interlaced H.264.** tsinfo.py claimed otherwise,
+  and that was wrong - UK Freeview HD is 1080i and the TV HAT handles it, as does
+  VK3RTV's output in Australia. The note now says so rather than sending people
+  looking for a fault that is not there. The level warning is also relaxed to
+  above 4.1 rather than above 4.0.
+
 ## 1.9.38
 * **Fix: the preset menu on the web page was emptied as the page loaded.** A
   leftover line from the old code cleared it before it could be used, so there

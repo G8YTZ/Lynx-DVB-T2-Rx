@@ -21,7 +21,7 @@ STREAM_TYPES = {
     0x81: "AC-3 audio", 0x87: "E-AC-3 audio",
 }
 PI_CAN_DECODE = {0x1b: "yes, in hardware", 0x02: "no (no MPEG-2 licence on modern Pis)",
-                 0x24: "NO - a Pi has no HEVC decoder for this", 0x51: "NO"}
+                 0x24: "no - a Pi has no HEVC decoder", 0x51: "no"}
 
 
 def sections(data, pid_wanted):
@@ -240,9 +240,10 @@ def main():
                         sps["w"], sps["h"], "INTERLACED" if sps["interlaced"] else "progressive",
                         sps["profile"], sps["level"]))
                     if sps["interlaced"]:
-                        print("              ^ a Pi's hardware decoder does not handle interlaced H.264")
-                    elif sps["level_num"] > 40:
-                        print("              ^ above level 4.0 - beyond the Pi's hardware decoder")
+                        print("              (interlaced: UK Freeview HD is coded this way and a Pi")
+                        print("               decodes it, so this alone is not a reason for no picture)")
+                    elif sps["level_num"] > 41:
+                        print("              ^ above level 4.1 - may be beyond the Pi's hardware decoder")
                     elif sps["h"] == 1088:
                         print("              (1088 is normal: 1080 rounded up to whole macroblocks,")
                         print("               with the cropping flag left out. A Pi decodes it fine.)")

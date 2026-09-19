@@ -174,7 +174,7 @@ The same commands work locally: `t2rx-ctl tune 437.250 2000`,
 |---|---|
 | A desktop or login prompt instead of the status page | `sudo systemctl set-default multi-user.target` then reboot. The receiver needs the display to itself. |
 | Not sure what a multiplex contains | Capture 20 seconds and look: `sudo systemctl stop t2rx`, `sudo timeout 20 /opt/t2rx/t2rx -f 445500000 -b 7 -q -G > /tmp/a.ts`, `sudo systemctl start t2rx`, then `python3 ~/Lynx-DVB-T2-Rx/tools/tsinfo.py /tmp/a.ts` |
-| LOCKED but no picture, and tsinfo says INTERLACED or level 4.2 | Beyond the Pi's hardware decoder. On a Pi 4 or 5 set `decoder = sw` in `t2rx.conf`; a Zero or Pi 3 has not the cores for HD in software. |
+| LOCKED but no picture on a service that used to work | Usually a keyframe: the receiver waits for one before showing anything, and some transmitters send them only every few seconds. If it never arrives, check which service is selected (Left/Right, or the web page) - a multiplex often carries one with no video. |
 | LOCKED but no picture, on a multiplex with several services | The receiver is watching a service with no video. Press Left or Right, or use the web page, to choose another; the choice is saved in the preset. |
 | Frequency shown in amber, with "the signal is +1.000 MHz away" | Not a fault: a narrow tuner pulls in carriers well off frequency, and the receiver is telling you where this one really is. Tune to the frequency shown, or ignore it. |
 | 2000 kHz hard to lock when 1350 and 1700 are fine | The tuner has no IF filter between 1.7 and 5 MHz, so 2000 uses the 5 MHz one and collects extra noise. Try `if_bw = 3` in that preset to use the 1.7 MHz filter instead. |
