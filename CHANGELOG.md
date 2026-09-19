@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.41
+* **The receiver now says why there is no picture.** The tuner reads the H.264
+  profile, level, size and interlace out of the stream itself, and when nothing
+  decodes the screen says so: "1920x1080p L4.2 - too much for this Pi", with a
+  line underneath suggesting `decoder = sw` on a Pi 4 or 5. Until now a stream
+  the decoder could not take looked exactly like a weak signal.
+* This came from VK3RTV in Australia, where the repeater's idle logo player
+  sends 1080p50 (level 4.2) while relayed transmissions are 1080i at level 4.0 -
+  so the receiver showed users' pictures perfectly and nothing at all in between.
+
 ## 1.9.40
 * **"LOCKED - waiting for picture" no longer lasts for ever.** The stall watchdog
   added in 1.9.27 only noticed a picture that stopped, not one that never

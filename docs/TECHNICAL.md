@@ -396,6 +396,13 @@ selected (`program-number` on `tsdemux`), and the choice is stored in the preset
 An Australian repeater sending two programmes on one 7 MHz channel is what
 prompted this.
 
+### 6.5c What the picture is
+The tuner parses the first SPS it sees and reports `vid=1920x1080p prof=100
+level=4.2` in the status file. A Pi's hardware decoder handles H.264 to level
+4.0/4.1, so 1080p50 gives no picture at all; interlaced coding is fine, since UK
+Freeview HD is 1080i. The receiver uses this to explain itself rather than
+leaving a decodable-looking signal with a blank screen.
+
 ### 6.6 Updates
 Checks run once a minute after boot, and hourly after that. (A GLib timer keeps
 repeating while its callback returns True, so the boot check must return False -

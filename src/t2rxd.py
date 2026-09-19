@@ -42,7 +42,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.40"
+VERSION = "t2rx 1.9.41"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -722,6 +722,21 @@ class Receiver:
         self.last_frame = 0.0
         self._restart_soon(0.5)
 
+    def _picture_note(self):
+        """The tuner reads the H.264 parameters out of the stream. A Pi's hardware
+        decoder takes up to level 4.1, so 1080p50 (level 4.2) produces no picture
+        at all - indistinguishable, from the outside, from a weak signal. Say so."""
+        vid = self.st.get("vid")
+        if not vid:
+            return None
+        try:
+            level = float(self.st.get("level", "0"))
+        except ValueError:
+            level = 0.0
+        if level > 4.1 and self.cfg.get("decoder", "auto") != "sw":
+            return "%s L%.1f - too much for this Pi" % (vid, level)
+        return "%s L%.1f" % (vid, level)
+
     def _no_picture_check(self):
         """Locked, but nothing has ever been decoded. Reported from Australia: the
         receiver sat on "waiting for picture" indefinitely after being restarted
@@ -735,6 +750,11 @@ class Receiver:
             return
         self.no_picture += 1
         self.locked_at = time.monotonic()
+        note = self._picture_note()
+        if note and self.no_picture == 1:
+            log("no picture: the stream is %s" % note)
+            if "too much" in note:
+                self.warning = "this Pi decodes H.264 to level 4.1; try decoder = sw on a Pi 4 or 5"
         # a multiplex often carries a service with no video in it; if restarting
         # twice has not helped, try the next one before giving up on this pass
         if self.no_picture >= 3 and len(self.services) > 1:
@@ -829,7 +849,11 @@ class Receiver:
         self.last_idle = now
         msg = self.message
         if not msg and self.st.get("state") == "LOCK" and not self.video_on:
-            msg = ("LOCKED - waiting for picture", osd.GREEN)
+            note = self._picture_note()
+            if note and "too much" in note:
+                msg = (note, osd.AMBER)
+            else:
+                msg = ("LOCKED - waiting for picture", osd.GREEN)
         info = dict(self.info)
         # self.info is only refreshed when the tuner starts, so between a preset
         # change and the retune it still describes the old channel - which made

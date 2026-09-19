@@ -404,10 +404,12 @@ def render_idle(W, H, st, info, presets, message=None, version=""):
         d.text((cx + 210 * s, y), val, font=font(28 * s, bold=True), fill=c, anchor="lm")
         bar(d, cx + 430 * s, y - 9 * s, cw - 480 * s, 18 * s, frac, c, s)
         y += 62 * s
+    svcs = info.get("services") or []
     warn = info.get("warning")
     if warn:
-        d.text((cx + 50 * s, cy + ch - 30 * s), warn, font=font(24 * s), fill=AMBER, anchor="lm")
-    svcs = info.get("services") or []
+        # below the card when the service list is using the bottom of it
+        wy = (cy + ch + 34 * s) if len(svcs) > 1 else (cy + ch - 30 * s)
+        d.text((cx + 50 * s, wy), warn, font=font(24 * s), fill=AMBER, anchor="lm")
     if len(svcs) > 1:
         y2 = cy + ch - 66 * s
         d.text((cx + 50 * s, y2), "Services here:", font=font(20 * s), fill=MUTED)

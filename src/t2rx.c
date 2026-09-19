@@ -192,6 +192,7 @@ int main(int argc, char** argv)
     static unsigned char gbuf[188 * 1024 + sizeof ((tsgate*)0)->pes];
     static tsgate gate;
     tsgate_init(&gate);
+    h264info vid; memset(&vid, 0, sizeof vid);   /* what the picture actually is */
     double t_tune = now(), t_stat = 0, t_unlock = 0, t_start = now();
     int locked = 0, ever = 0;
     unsigned long long bytes = 0, bytes_last = 0;
@@ -202,6 +203,14 @@ int main(int argc, char** argv)
             ssize_t n = read(dvr, buf, sizeof buf);
             unsigned char* obuf = buf;
             if (n > 0) n -= n % 188;
+            /* Read the SPS as it goes past: a Pi decodes up to level 4.0/4.1, so
+             * 1080p50 (level 4.2) gives no picture at all, which looks from the
+             * outside exactly like a weak signal. Saying what the stream is lets
+             * the receiver explain itself. */
+            if (n > 0 && !vid.ok)
+                for (ssize_t i = 0; i + 188 <= n; i += 188)
+                    if (buf[i] == 0x47 && ts_read_sps(buf + i, &vid)) break;
+
             if (n > 0 && gate_on && !gate.open) {
                 /* hold back everything but the tables until the first keyframe */
                 n = (ssize_t)tsgate_filter(&gate, buf, (size_t)n, gbuf);
@@ -254,6 +263,10 @@ int main(int argc, char** argv)
                 snprintf(tmp, sizeof tmp, "%s.tmp", statf);
                 FILE* s = fopen(tmp, "w");
                 if (s) {
+                    if (vid.ok)
+                        fprintf(s, "vid=%dx%d%c prof=%d level=%d.%d\n", vid.width, vid.height,
+                                vid.interlaced ? 'i' : 'p', vid.profile,
+                                vid.level / 10, vid.level % 10);
                     fprintf(s, "state=%s sig=%.1f cnr=%.1f rate=%.2f mod=%s fec=%s gi=%s fft=%s per=%ld off=%d\n",
                             lk ? "LOCK" : (st & FE_HAS_CARRIER ? "SYNC" : "NOSIG"),
                             sig, cnr, rate, mod, fec, gi, fft, per, lk ? carrier_offset() : 0);

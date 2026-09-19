@@ -79,6 +79,111 @@ static int ts_has_sps(const uint8_t* p)
     return 0;
 }
 
+/* --- what the picture actually is -------------------------------------------
+ * A Pi's hardware decoder takes H.264 up to level 4.0/4.1; 1080p50 is level 4.2
+ * and produces no picture at all, which from outside looks exactly like a weak
+ * signal. Reading profile and level out of the SPS lets the receiver say so.
+ * Interlaced coding is fine - UK Freeview HD is 1080i. */
+typedef struct { int ok, profile, level, width, height, interlaced; } h264info;
+
+typedef struct { const uint8_t* d; size_t n; size_t pos; } bitrd;
+
+static unsigned br_u(bitrd* b, int bits)
+{
+    unsigned v = 0;
+    while (bits--) {
+        unsigned byte = (b->pos >> 3) < b->n ? b->d[b->pos >> 3] : 0;
+        v = (v << 1) | ((byte >> (7 - (b->pos & 7))) & 1);
+        b->pos++;
+    }
+    return v;
+}
+
+static unsigned br_ue(bitrd* b)
+{
+    int z = 0;
+    while (br_u(b, 1) == 0 && z < 32) z++;
+    return z ? ((1u << z) - 1 + br_u(b, z)) : 0;
+}
+
+static int br_se(bitrd* b)
+{
+    unsigned k = br_ue(b);
+    return (k & 1) ? (int)((k + 1) / 2) : -(int)(k / 2);
+}
+
+/* Parse an unescaped SPS payload (after the NAL header byte). */
+static h264info h264_parse_sps(const uint8_t* d, size_t n)
+{
+    h264info h; bitrd b = { d, n, 0 };
+    memset(&h, 0, sizeof h);
+    h.profile = (int)br_u(&b, 8);
+    br_u(&b, 8);                       /* constraint flags + reserved */
+    h.level = (int)br_u(&b, 8);
+    br_ue(&b);                         /* seq_parameter_set_id */
+    if (h.profile == 100 || h.profile == 110 || h.profile == 122 || h.profile == 244 ||
+        h.profile == 44 || h.profile == 83 || h.profile == 86 || h.profile == 118 ||
+        h.profile == 128 || h.profile == 138 || h.profile == 139 || h.profile == 134) {
+        unsigned chroma = br_ue(&b);
+        if (chroma == 3) br_u(&b, 1);
+        br_ue(&b); br_ue(&b); br_u(&b, 1);
+        if (br_u(&b, 1)) {             /* scaling matrices */
+            int lists = (chroma != 3) ? 8 : 12;
+            for (int i = 0; i < lists; i++)
+                if (br_u(&b, 1)) {
+                    int size = (i < 6) ? 16 : 64, last = 8, next = 8;
+                    for (int j = 0; j < size; j++) {
+                        if (next) next = (last + br_se(&b) + 256) % 256;
+                        last = next ? next : last;
+                    }
+                }
+        }
+    }
+    br_ue(&b);                         /* log2_max_frame_num_minus4 */
+    unsigned poc = br_ue(&b);
+    if (poc == 0) br_ue(&b);
+    else if (poc == 1) {
+        br_u(&b, 1); br_se(&b); br_se(&b);
+        unsigned k = br_ue(&b);
+        for (unsigned i = 0; i < k && i < 256; i++) br_se(&b);
+    }
+    br_ue(&b); br_u(&b, 1);            /* max_num_ref_frames, gaps_allowed */
+    h.width = (int)(br_ue(&b) + 1) * 16;
+    unsigned hmb = br_ue(&b) + 1;
+    int frame_mbs_only = (int)br_u(&b, 1);
+    h.interlaced = !frame_mbs_only;
+    h.height = (int)hmb * 16 * (frame_mbs_only ? 1 : 2);
+    if (!frame_mbs_only) br_u(&b, 1);
+    br_u(&b, 1);                       /* direct_8x8_inference */
+    if (br_u(&b, 1)) {                 /* cropping */
+        unsigned l = br_ue(&b), r = br_ue(&b), t = br_ue(&b), bo = br_ue(&b);
+        h.width -= (int)(l + r) * 2;
+        h.height -= (int)(t + bo) * 2 * (frame_mbs_only ? 1 : 2);
+    }
+    h.ok = (h.width > 0 && h.height > 0 && h.level > 0);
+    return h;
+}
+
+/* Find an SPS in one TS packet and read it. */
+static int ts_read_sps(const uint8_t* p, h264info* out)
+{
+    int off = 4;
+    if (p[3] & 0x20) off += 1 + p[4];
+    for (int i = off; i + 4 < 188; i++) {
+        if (!(p[i] == 0 && p[i + 1] == 0 && p[i + 2] == 1 && (p[i + 3] & 0x1f) == 7)) continue;
+        uint8_t raw[160]; size_t w = 0; int zeros = 0;
+        for (int j = i + 4; j < 188 && w < sizeof raw; j++) {
+            uint8_t c = p[j];
+            if (zeros >= 2 && c == 3) { zeros = 0; continue; }   /* emulation prevention */
+            zeros = (c == 0) ? zeros + 1 : 0;
+            raw[w++] = c;
+        }
+        h264info h = h264_parse_sps(raw, w);
+        if (h.ok) { *out = h; return 1; }
+    }
+    return 0;
+}
+
 /* Filter n bytes (whole 188-byte packets) in place; returns bytes kept.
  * buf must have room for n + sizeof g->pes bytes (the held PES start is
  * released in front of the packet that opens the gate). */
