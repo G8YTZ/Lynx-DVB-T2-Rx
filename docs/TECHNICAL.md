@@ -388,6 +388,12 @@ Preset edits rewrite `/etc/t2rx/presets.conf` through a temporary file and
 `os.replace`, so an interrupted write can't leave it empty or half-written.
 
 ### 6.5b Several services in one multiplex
+The PAT is the authority on what a multiplex contains. The SDT names services,
+but comes in two forms: "actual" for this transport stream and "other" for
+neighbouring ones, which broadcasters send so receivers can build a regional
+channel list - so only `actual_ts` sections are used, and only for services the
+PAT lists.
+
 The PAT lists the programmes; the SDT names them. Both are read from `tsparse`
 sections, so the receiver knows what a multiplex carries within a second of
 locking. With no choice made, `tsdemux` takes the first programme - which is

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.42
+* **Fix: services from other multiplexes appeared in the list.** An SDT describes
+  either the multiplex you are tuned to ("actual") or a different one ("other"),
+  and UK broadcasters send plenty of the latter so a set-top box can build a full
+  channel list. The receiver took both, so on BBC B from Mendip it listed
+  channels from every mux in the region - and the no-picture watchdog then tried
+  switching to services that were not there, which glitched it back through
+  searching and locking. Reported by Ian. Only SDT "actual" is used now, and a
+  service is only listed if the PAT says it is in this multiplex.
+
 ## 1.9.41
 * **The receiver now says why there is no picture.** The tuner reads the H.264
   profile, level, size and interlace out of the stream itself, and when nothing

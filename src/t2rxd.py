@@ -42,7 +42,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.41"
+VERSION = "t2rx 1.9.42"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -225,6 +225,7 @@ class Receiver:
         self.pause_t = 0.0
         self.over_t = None
         self.services = []           # [(program number, name)] from the PAT and SDT
+        self.pat_programs = set()    # what the PAT says is in this multiplex
         self._logged_mux = False
         self.service = 0             # 0 = whichever the multiplex offers first
         self.tune = None             # on-screen tuning entry, see key()
@@ -297,6 +298,7 @@ class Receiver:
         p = self.cur()
         self.set_driver(p["bw"], p.get("if_bw"))
         self.services = []
+        self.pat_programs = set()
         self._logged_mux = False
         self.service = int(p.get("service", 0) or 0)
         self.info = {"preset": self.preset, "name": p["name"], "freq": p["freq"], "bw": p["bw"],
@@ -544,6 +546,7 @@ class Receiver:
                 progs = [p.program_number for p in (sec.get_pat() or []) if p.program_number]
             except (TypeError, AttributeError):
                 return
+            self.pat_programs = set(progs)
             known = {n for n, _ in self.services}
             for n in progs:
                 if n not in known:
@@ -558,9 +561,19 @@ class Receiver:
         if sec.section_type != GstMpegts.SectionType.SDT:
             return
         sdt = sec.get_sdt()
+        # An SDT describes either this multiplex ("actual") or another one
+        # ("other"), and UK broadcasters send plenty of the latter so a set-top
+        # box can build a full channel list. Taking both put every channel from
+        # every mux in the list - reported from Mendip BBC B - and the receiver
+        # then tried to switch to services that were not there at all.
+        if not getattr(sdt, "actual_ts", True):
+            return
+        known = {n for n, _ in self.services}         # the PAT says what is here
         changed = False
         for svc in sdt.services or []:
             sid = getattr(svc, "service_id", 0)
+            if known and sid not in known:
+                continue
             for desc in svc.descriptors or []:
                 if desc.tag != GstMpegts.DVBDescriptorType.SERVICE:
                     continue
@@ -1135,7 +1148,7 @@ class Receiver:
         self.start()
 
     def next_service(self, step=1):
-        ids = [n for n, _ in self.services]
+        ids = [n for n, _ in self.services if not self.pat_programs or n in self.pat_programs]
         if len(ids) < 2:
             return
         here = ids.index(self.service) if self.service in ids else 0
