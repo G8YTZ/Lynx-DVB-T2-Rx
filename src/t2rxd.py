@@ -42,7 +42,7 @@ try:
 except (OSError, ImportError):          # no libdrm: fall back to blending
     osdplane = None
 
-VERSION = "t2rx 1.9.42"
+VERSION = "t2rx 1.9.43"
 # Test hooks: T2RX_TUNER (tuner program), T2RX_DECODER, T2RX_VSINK, T2RX_ASINK, T2RX_ROOT
 ENV = os.environ.get
 CONF = "/etc/t2rx/t2rx.conf"
@@ -100,7 +100,7 @@ def read_conf():
         "osd_interval": "2", "start_buffer_ms": "1500", "max_buffer_ms": "8000",
         "updates": "auto", "web": "on", "web_port": "8080",
         "decoder": "auto", "deinterlace": "auto", "stall_secs": "6",
-        "pacing": "on", "pace_ms": "40", "audio_slave": "resample",
+        "pacing": "on", "pace_ms": "40", "audio_slave": "resample", "aspect": "auto",
         "no_picture_secs": "20",
         "cec": "yes", "cec_name": "Lynx DVB-T2 Rx", "cec_active_source": "yes",
         "adapter": "0", "loss_seconds": "5"}})
@@ -454,9 +454,51 @@ class Receiver:
             w, h = s.get_value("width"), s.get_value("height")
             fr = s.get_fraction("framerate")
             fps = (fr[1] / fr[2]) if fr and fr[0] and fr[2] else 0
+            par = s.get_fraction("pixel-aspect-ratio")
+            pn, pd = (par[1], par[2]) if par and par[0] and par[2] else (1, 1)
             self.video_w = w or 800
-            GLib.idle_add(self._video_started, gen, "H.264 %dx%d %s" % (w, h, ("%g fps" % fps) if fps else ""))
+            shape = ""
+            if (w, h) and pn != pd:
+                shape = "  %s" % ("16:9" if abs((w * pn) / float(h * pd) - 16 / 9.0) < 0.05
+                                  else "%.2f:1" % ((w * pn) / float(h * pd)))
+            GLib.idle_add(self._shape_picture, gen, w, h, pn, pd)
+            GLib.idle_add(self._video_started, gen,
+                          "H.264 %dx%d %s%s" % (w, h, ("%g fps" % fps) if fps else "", shape))
         return Gst.PadProbeReturn.REMOVE
+
+    def _shape_picture(self, gen, w, h, pn, pd):
+        """Broadcast SD is anamorphic: 544x576 or 704x576 with a pixel aspect ratio
+        that makes it 16:9. Ignoring that gives a picture stretched to fill the
+        screen and looking zoomed in - reported on TBN from Mendip. kmssink is told
+        the rectangle to draw in, so the picture keeps its proper shape."""
+        if gen != self.gen or not self.pipe or not w or not h:
+            return False
+        want = self.cfg.get("aspect", "auto")
+        if want == "stretch":
+            return False
+        if want in ("16:9", "4:3"):
+            dar = (16 / 9.0) if want == "16:9" else (4 / 3.0)
+        else:
+            dar = (w * pn) / float(h * pd)
+        sw, sh = (self.plane.w, self.plane.h) if self.plane is not None else (self.fb.w, self.fb.h)
+        if not sw or not sh:
+            return False
+        if dar >= sw / float(sh):
+            rw, rh = sw, int(round(sw / dar))          # letterbox
+        else:
+            rh, rw = sh, int(round(sh * dar))          # pillarbox
+        rx, ry = (sw - rw) // 2, (sh - rh) // 2
+        sink = self.pipe.get_by_name("vsink")
+        if sink is None:
+            return False
+        try:
+            va = Gst.ValueArray((rx, ry, rw, rh))
+            sink.set_property("render-rectangle", va)
+            if (rw, rh) != (sw, sh):
+                log("picture %dx%d shown as %dx%d at %d,%d (%.2f:1)" % (w, h, rw, rh, rx, ry, dar))
+        except (TypeError, AttributeError) as e:
+            log("picture shape: %s" % e)
+        return False
 
     def _video_started(self, gen, vinfo):
         if gen != self.gen:

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.43
+* **Anamorphic pictures keep their shape.** Broadcast SD is 544x576 or 704x576
+  with a pixel aspect ratio that makes it 16:9, and the receiver ignored that -
+  so a standard-definition service looked stretched and zoomed in, as Ian found
+  on TBN from Mendip. The picture is now placed in a rectangle of the right
+  shape, letterboxed or pillarboxed as required, and the on-screen video line
+  says what shape it is. `aspect = 16:9`, `4:3` or `stretch` override it.
+
 ## 1.9.42
 * **Fix: services from other multiplexes appeared in the list.** An SDT describes
   either the multiplex you are tuned to ("actual") or a different one ("other"),

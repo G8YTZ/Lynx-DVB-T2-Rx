@@ -185,6 +185,7 @@ The same commands work locally: `t2rx-ctl tune 437.250 2000`,
 | Nothing responds - remote or web | The tune panel may be open (it takes every key); press BACK a few times, or wait 90 s for it to close. |
 | Picture hesitant after a scene change | The decoder is being handed bursts. `pacing = on` in `t2rx.conf` (the default) smooths them using the stream's own clock; `pacing = off` if you need the old behaviour. |
 | Picture freezes, signal still locked | The decoder has stalled - common on a Zero decoding 1080. The receiver restarts the player after 6 seconds (`stall_secs`). The real cure is a smaller picture at the transmitting end: 720p decodes far more easily than 1080. |
+| Picture stretched or zoomed in | The stream is anamorphic and its shape is being ignored, or a transmitter is labelling it wrongly. `aspect = auto` (the default) keeps the stream's own shape; `16:9` or `4:3` force one. |
 | Sound breaks up | Check `t2rx.log` says `OSD on display plane` (if `blended`, the CPU is overloaded). Raise `audio_buffer_ms` (e.g. 400), or `osd_interval`. Distortion only on loud peaks: lower `audio_volume` (e.g. 0.7). |
 | Remote does nothing | Enable CEC on the TV; try another HDMI input; `cec-ctl` should show the Pi. |
 | Black bars above and below on a TV | Re-run `./install.sh` and reboot: it clears any forced HDMI mode so the display chooses. Then set the TV's picture size to "Just Scan" / "Screen Fit" / "1:1" - many letterbox whatever they are sent. |
